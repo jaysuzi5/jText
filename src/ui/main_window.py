@@ -21,6 +21,8 @@ from src.document import Document
 from src.file_manager import FileManager
 from src.recent_files_manager import RecentFilesManager
 from src.find_replace import FindReplaceEngine
+from src.json_handler import JsonHandler
+from src.json_syntax_highlighter import JsonSyntaxHighlighter
 
 
 class FindReplaceDialog(QDialog):
@@ -85,6 +87,7 @@ class MainWindow(QMainWindow):
         # We use QTabWidget directly without TabManager for simpler management
         self.documents = {}  # Maps tab_widget_index -> Document
         self.text_edits = {}  # Maps tab_widget_index -> QTextEdit
+        self.highlighters = {}  # Maps tab_widget_index -> JsonSyntaxHighlighter
 
         # Create UI (order matters: tab_widget must exist before menu_bar)
         self._create_tab_widget()
@@ -129,6 +132,17 @@ class MainWindow(QMainWindow):
         # Store document and text edit
         self.documents[tab_index] = document
         self.text_edits[tab_index] = text_edit
+
+        # Check if this is a JSON file and apply syntax highlighting
+        is_json = False
+        if document.file_path and str(document.file_path).endswith('.json'):
+            is_json = True
+        elif document.content and JsonHandler.is_json(document.content):
+            is_json = True
+
+        if is_json:
+            highlighter = JsonSyntaxHighlighter(text_edit.document())
+            self.highlighters[tab_index] = highlighter
 
         # Load content if exists
         if document.content:
@@ -249,6 +263,24 @@ class MainWindow(QMainWindow):
         find_action.triggered.connect(self._show_find_replace)
         edit_menu.addAction(find_action)
 
+        # JSON menu
+        json_menu = self.menuBar().addMenu("&JSON")
+
+        # Format JSON
+        format_json_action = QAction("&Format JSON", self)
+        format_json_action.triggered.connect(self._format_json)
+        json_menu.addAction(format_json_action)
+
+        # Minify JSON
+        minify_json_action = QAction("&Minify JSON", self)
+        minify_json_action.triggered.connect(self._minify_json)
+        json_menu.addAction(minify_json_action)
+
+        # Validate JSON
+        validate_json_action = QAction("&Validate JSON", self)
+        validate_json_action.triggered.connect(self._validate_json)
+        json_menu.addAction(validate_json_action)
+
     def _create_find_replace_dialog(self):
         """Create the find and replace dialog."""
         self.find_replace_dialog = FindReplaceDialog(self)
@@ -362,6 +394,8 @@ class MainWindow(QMainWindow):
             del self.documents[index]
         if index in self.text_edits:
             del self.text_edits[index]
+        if index in self.highlighters:
+            del self.highlighters[index]
 
     def _new_file(self):
         """Create a new file in a new tab."""
@@ -634,3 +668,69 @@ class MainWindow(QMainWindow):
     def _show_error(self, message: str):
         """Show an error message to the user."""
         QMessageBox.critical(self, "Error", message)
+
+    def _is_json_file(self):
+        """Check if current file is a JSON file."""
+        doc = self._get_current_document()
+        if not doc:
+            return False
+
+        # Check by file extension
+        if doc.file_path and str(doc.file_path).endswith('.json'):
+            return True
+
+        # Check by content validation
+        return JsonHandler.is_json(doc.content)
+
+    def _format_json(self):
+        """Format the current JSON document."""
+        doc = self._get_current_document()
+        text_edit = self._get_current_text_edit()
+        if not doc or not text_edit:
+            return
+
+        formatted, success = JsonHandler.format_json(doc.content)
+
+        if success:
+            self._is_loading = True
+            doc.content = formatted
+            text_edit.setPlainText(formatted)
+            self._is_loading = False
+            self._update_title()
+            self._update_status()
+            QMessageBox.information(self, "Format JSON", "JSON formatted successfully!")
+        else:
+            self._show_error("Invalid JSON: unable to format. Check syntax and try again.")
+
+    def _minify_json(self):
+        """Minify the current JSON document."""
+        doc = self._get_current_document()
+        text_edit = self._get_current_text_edit()
+        if not doc or not text_edit:
+            return
+
+        minified, success = JsonHandler.minify_json(doc.content)
+
+        if success:
+            self._is_loading = True
+            doc.content = minified
+            text_edit.setPlainText(minified)
+            self._is_loading = False
+            self._update_title()
+            self._update_status()
+            QMessageBox.information(self, "Minify JSON", "JSON minified successfully!")
+        else:
+            self._show_error("Invalid JSON: unable to minify. Check syntax and try again.")
+
+    def _validate_json(self):
+        """Validate the current JSON document."""
+        doc = self._get_current_document()
+        if not doc:
+            return
+
+        is_valid, error = JsonHandler.validate_json(doc.content)
+
+        if is_valid:
+            QMessageBox.information(self, "Validate JSON", "JSON is valid!")
+        else:
+            QMessageBox.warning(self, "Validate JSON", f"JSON validation failed:\n{error}")

@@ -15,12 +15,13 @@ A lightweight, feature-rich text editor for macOS designed as a Notepad++ altern
 - **Status Bar** - Real-time display of file name, modification state, cursor position, and tab info
 - **Keyboard Shortcuts** - All standard macOS keyboard shortcuts
 - **Multiple File Types** - Works with .txt, .py, .json, and any text file
+- **JSON Support** - Syntax highlighting, formatting, minification, and validation for JSON files
 
 ### Future Enhancements
-- JSON syntax highlighting with validation
 - Line numbers display
 - Customizable themes
-- Search and navigation features
+- Advanced search and navigation features
+- Language support for more file types
 
 ## System Requirements
 
@@ -94,6 +95,23 @@ The application window will open with a blank document ready for editing.
 | **Cmd+V** | Paste |
 | **Cmd+H** | Find and Replace |
 | **Cmd+Q** | Quit Application |
+
+### JSON Operations
+
+When editing JSON files (detected by `.json` extension or JSON content), the following menu options become available:
+
+| Menu Item | Description |
+|-----------|-------------|
+| **JSON → Format JSON** | Pretty-print the JSON with proper indentation and formatting |
+| **JSON → Minify JSON** | Remove all whitespace and reduce file size |
+| **JSON → Validate JSON** | Check JSON syntax and display any errors found |
+
+**Color-Coded Syntax Highlighting for JSON:**
+- **Blue (Bold)** - Object keys
+- **Green** - String values
+- **Orange** - Numbers
+- **Red (Bold)** - Boolean values (true/false) and null
+- **Gray (Bold)** - Brackets and structural characters
 
 ### File Operations
 
@@ -186,13 +204,14 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ### Test Coverage
 
-- **130 unit tests** covering all core functionality
+- **168 unit tests** covering all core functionality
 - **97-100% coverage** on core modules:
-  - Document: 100%
-  - FileManager: 100%
-  - TabManager: 98%
-  - RecentFilesManager: 94%
-  - FindReplaceEngine: 97%
+  - Document: 100% (21 tests)
+  - FileManager: 100% (24 tests)
+  - TabManager: 98% (24 tests)
+  - RecentFilesManager: 94% (21 tests)
+  - FindReplaceEngine: 97% (40 tests)
+  - JsonHandler: 100% (38 tests)
 - All tests pass before each commit
 
 ### Project Structure
@@ -205,6 +224,8 @@ jText/
 │   ├── tab_manager.py           # Multi-tab document management (24 tests)
 │   ├── recent_files_manager.py  # Recent files tracking (21 tests)
 │   ├── find_replace.py          # Find and replace engine (40 tests)
+│   ├── json_handler.py          # JSON operations (38 tests)
+│   ├── json_syntax_highlighter.py # JSON syntax highlighting
 │   └── ui/
 │       └── main_window.py       # PyQt6 main application window
 ├── tests/
@@ -212,7 +233,8 @@ jText/
 │   ├── test_file_manager.py
 │   ├── test_tab_manager.py
 │   ├── test_recent_files_manager.py
-│   └── test_find_replace.py
+│   ├── test_find_replace.py
+│   └── test_json_handler.py
 ├── main.py                       # Application entry point
 ├── CLAUDE.md                     # Development guide for Claude Code
 ├── pyproject.toml               # uv project configuration
@@ -284,11 +306,13 @@ For issues, feature requests, or questions:
 
 ## Future Roadmap
 
-- [ ] Multiple tabs support
-- [ ] JSON syntax highlighting
-- [ ] Find and replace
+- [x] Multiple tabs support
+- [x] JSON syntax highlighting
+- [x] Find and replace
+- [x] Recent files menu
+- [x] JSON formatting and validation
 - [ ] Line numbers
-- [ ] Recent files menu
 - [ ] Customizable themes
-- [ ] Search and navigation
+- [ ] Advanced search and navigation
 - [ ] Plugin system
+- [ ] More syntax highlighting (Python, HTML, CSS, etc.)
