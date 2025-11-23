@@ -4,21 +4,23 @@ A lightweight, feature-rich text editor for macOS designed as a Notepad++ altern
 
 ## Features
 
-### MVP (Current Release)
-- **Open & Edit Files** - Open text files and edit them in a clean, distraction-free interface
-- **Save Files** - Save your work to disk with Save and Save As options
+### Current Release
+- **Multiple Tabs** - Edit multiple files simultaneously in separate tabs
+- **Open & Edit Files** - Open text files and edit them in a clean interface
+- **Save Files** - Save your work with Save and Save As options
+- **Find & Replace** - Advanced find and replace with case sensitivity and whole-words options
+- **Recent Files** - Quick access to recently opened files from File menu
 - **Copy & Paste** - Full clipboard support for text manipulation
 - **Undo/Redo** - Complete undo/redo history for all changes
-- **Status Bar** - Real-time display of file name, modification state, and cursor position
+- **Status Bar** - Real-time display of file name, modification state, cursor position, and tab info
 - **Keyboard Shortcuts** - All standard macOS keyboard shortcuts
 - **Multiple File Types** - Works with .txt, .py, .json, and any text file
 
 ### Future Enhancements
-- Multiple tabs for editing multiple files simultaneously
 - JSON syntax highlighting with validation
-- Find and replace functionality
 - Line numbers display
-- Recent files quick access
+- Customizable themes
+- Search and navigation features
 
 ## System Requirements
 
@@ -80,23 +82,25 @@ The application window will open with a blank document ready for editing.
 
 | Shortcut | Action |
 |----------|--------|
-| **Cmd+N** | New document |
-| **Cmd+O** | Open file |
-| **Cmd+S** | Save file |
+| **Cmd+N** | New Tab |
+| **Cmd+O** | Open File |
+| **Cmd+S** | Save |
 | **Cmd+Shift+S** | Save As |
+| **Cmd+W** | Close Tab |
 | **Cmd+Z** | Undo |
 | **Cmd+Shift+Z** | Redo |
 | **Cmd+X** | Cut |
 | **Cmd+C** | Copy |
 | **Cmd+V** | Paste |
-| **Cmd+Q** | Quit application |
+| **Cmd+H** | Find and Replace |
+| **Cmd+Q** | Quit Application |
 
 ### File Operations
 
 **Opening a File:**
 1. Press `Cmd+O` or go to File → Open
 2. Navigate to the file you want to open
-3. Click "Open"
+3. Click "Open" (file opens in a new tab)
 
 **Saving a File:**
 1. Press `Cmd+S` or go to File → Save
@@ -107,6 +111,58 @@ The application window will open with a blank document ready for editing.
 1. Press `Cmd+Shift+S` or go to File → Save As
 2. Choose a new location or name
 3. Click "Save"
+
+### Tab Management
+
+**Creating a New Tab:**
+- Press `Cmd+N` or go to File → New Tab
+- Each tab shows the filename in the tab bar
+- Modified files show an asterisk (*) in the tab
+
+**Switching Between Tabs:**
+- Click on any tab at the top to switch to that document
+- The status bar shows "Tab X of Y"
+
+**Closing a Tab:**
+- Press `Cmd+W` or go to File → Close Tab
+- If unsaved changes exist, you'll be prompted to save
+
+### Find and Replace
+
+**Opening Find & Replace:**
+- Press `Cmd+H` or go to Edit → Find and Replace
+- A dialog window opens with search and replace fields
+
+**Finding Text:**
+1. Enter the text to find in the "Find:" field
+2. Click "Find Next" to locate the first occurrence
+3. Matching text is highlighted in the editor
+4. Click "Find Next" again to find the next match
+
+**Replacing Text:**
+1. Enter search term in "Find:" field
+2. Enter replacement text in "Replace with:" field
+3. Click "Replace" to replace the first occurrence
+4. Or click "Replace All" to replace all occurrences at once
+
+**Find & Replace Options:**
+- ✓ **Case sensitive** - Match uppercase/lowercase exactly
+- ✓ **Whole words only** - Don't match partial words (e.g., "cat" won't match "caterpillar")
+
+### Recent Files
+
+**Accessing Recent Files:**
+- Go to File → Recent Files
+- Click any file to open it in a new tab
+- Recent files are automatically tracked when you open or save files
+
+**Clearing Recent Files:**
+- Go to File → Recent Files → Clear Recent Files
+
+**Technical Details:**
+- Saves to `~/.config/jtext/recent_files.json`
+- Shows up to 10 most recent files
+- Only displays files that still exist on disk
 
 ## Development
 
@@ -130,8 +186,13 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ### Test Coverage
 
-- **45 unit tests** covering core functionality
-- **100% coverage** on Document and FileManager modules
+- **130 unit tests** covering all core functionality
+- **97-100% coverage** on core modules:
+  - Document: 100%
+  - FileManager: 100%
+  - TabManager: 98%
+  - RecentFilesManager: 94%
+  - FindReplaceEngine: 97%
 - All tests pass before each commit
 
 ### Project Structure
@@ -139,16 +200,23 @@ uv run pytest tests/ --cov=src --cov-report=html
 ```
 jText/
 ├── src/
-│   ├── document.py          # Document model with undo/redo
-│   ├── file_manager.py      # File I/O operations
+│   ├── document.py              # Document model with undo/redo (21 tests)
+│   ├── file_manager.py          # File I/O operations (24 tests)
+│   ├── tab_manager.py           # Multi-tab document management (24 tests)
+│   ├── recent_files_manager.py  # Recent files tracking (21 tests)
+│   ├── find_replace.py          # Find and replace engine (40 tests)
 │   └── ui/
-│       └── main_window.py   # PyQt6 main application window
+│       └── main_window.py       # PyQt6 main application window
 ├── tests/
-│   ├── test_document.py     # Document tests (21 tests)
-│   └── test_file_manager.py # FileManager tests (24 tests)
-├── main.py                   # Application entry point
-├── CLAUDE.md                 # Development guide for Claude Code
-└── README.md                 # This file
+│   ├── test_document.py
+│   ├── test_file_manager.py
+│   ├── test_tab_manager.py
+│   ├── test_recent_files_manager.py
+│   └── test_find_replace.py
+├── main.py                       # Application entry point
+├── CLAUDE.md                     # Development guide for Claude Code
+├── pyproject.toml               # uv project configuration
+└── README.md                     # This file
 ```
 
 ### Adding New Dependencies

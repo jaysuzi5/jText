@@ -3,17 +3,68 @@
 from PyQt6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
-    QHBoxLayout,
     QWidget,
     QTextEdit,
     QStatusBar,
     QFileDialog,
+    QTabWidget,
+    QDialog,
+    QLabel,
+    QLineEdit,
+    QCheckBox,
+    QPushButton,
+    QMessageBox,
 )
-from PyQt6.QtGui import QKeySequence, QAction, QIcon
+from PyQt6.QtGui import QKeySequence, QAction, QTextCursor
 from PyQt6.QtCore import Qt, QTimer
 from pathlib import Path
 from src.document import Document
 from src.file_manager import FileManager
+from src.tab_manager import TabManager
+from src.recent_files_manager import RecentFilesManager
+from src.find_replace import FindReplaceEngine
+
+
+class FindReplaceDialog(QDialog):
+    """Dialog for find and replace operations."""
+
+    def __init__(self, parent=None):
+        """Initialize find/replace dialog."""
+        super().__init__(parent)
+        self.setWindowTitle("Find and Replace")
+        self.setGeometry(200, 200, 400, 150)
+
+        layout = QVBoxLayout()
+
+        # Find field
+        layout.addWidget(QLabel("Find:"))
+        self.find_input = QLineEdit()
+        layout.addWidget(self.find_input)
+
+        # Replace field
+        layout.addWidget(QLabel("Replace with:"))
+        self.replace_input = QLineEdit()
+        layout.addWidget(self.replace_input)
+
+        # Options
+        self.case_sensitive_check = QCheckBox("Case sensitive")
+        layout.addWidget(self.case_sensitive_check)
+
+        self.whole_words_check = QCheckBox("Whole words only")
+        layout.addWidget(self.whole_words_check)
+
+        # Buttons
+        button_layout = QVBoxLayout()
+        self.find_next_btn = QPushButton("Find Next")
+        self.replace_btn = QPushButton("Replace")
+        self.replace_all_btn = QPushButton("Replace All")
+
+        button_layout.addWidget(self.find_next_btn)
+        button_layout.addWidget(self.replace_btn)
+        button_layout.addWidget(self.replace_all_btn)
+
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
 
 
 class MainWindow(QMainWindow):
@@ -22,31 +73,71 @@ class MainWindow(QMainWindow):
     def __init__(self):
         """Initialize the main window."""
         super().__init__()
-        self.setWindowTitle("jText - Untitled")
-        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle("jText")
+        self.setGeometry(100, 100, 1000, 700)
 
-        self.document = Document()
+        # Initialize managers
+        self.tab_manager = TabManager()
+        self.recent_files = RecentFilesManager()
+        self.find_replace_engine = FindReplaceEngine()
+
         self._is_loading = False
+        self._current_find_position = 0
 
-        # Create UI (order matters: text_editor must exist before menu_bar)
-        self._create_text_editor()
+        # Create UI (order matters: tab_widget must exist before menu_bar)
+        self._create_tab_widget()
         self._create_menu_bar()
         self._create_status_bar()
-
-        # Connect document changes
-        self._update_title()
+        self._create_find_replace_dialog()
 
         # Timer for updating status bar position (debounced)
         self._position_timer = QTimer()
         self._position_timer.timeout.connect(self._update_status_position)
         self._position_timer.setSingleShot(True)
 
+    def _create_tab_widget(self):
+        """Create the tab widget with text editors."""
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        # Add initial blank tab
+        self._add_new_tab()
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+    def _add_new_tab(self):
+        """Add a new tab with a blank document."""
+        # Create document
+        doc = Document()
+        tab_index = self.tab_manager.add_tab(doc)
+
+        # Create text editor
+        text_edit = QTextEdit()
+        text_edit.setFont(text_edit.font())
+        text_edit.textChanged.connect(self._on_text_changed)
+        text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
+
+        # Store text edit reference in tab_manager for access
+        self._text_edit_widgets = getattr(self, "_text_edit_widgets", {})
+        self._text_edit_widgets[tab_index] = text_edit
+
+        # Add to tab widget
+        self.tab_widget.addTab(text_edit, "Untitled")
+        self.tab_widget.setCurrentIndex(tab_index)
+
+    def _get_current_text_edit(self):
+        """Get the current active text editor."""
+        current_index = self.tab_widget.currentIndex()
+        if current_index >= 0:
+            return self._text_edit_widgets.get(current_index)
+        return None
+
     def _create_menu_bar(self):
-        """Create the menu bar with File menu items."""
+        """Create the menu bar with all menu items."""
+        # File menu
         file_menu = self.menuBar().addMenu("&File")
 
         # New
-        new_action = QAction("&New", self)
+        new_action = QAction("&New Tab", self)
         new_action.setShortcut(QKeySequence.StandardKey.New)
         new_action.triggered.connect(self._new_file)
         file_menu.addAction(new_action)
@@ -68,6 +159,18 @@ class MainWindow(QMainWindow):
         save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         save_as_action.triggered.connect(self._save_file_as)
         file_menu.addAction(save_as_action)
+
+        # Close Tab
+        close_tab_action = QAction("&Close Tab", self)
+        close_tab_action.setShortcut("Cmd+W")
+        close_tab_action.triggered.connect(self._close_tab)
+        file_menu.addAction(close_tab_action)
+
+        file_menu.addSeparator()
+
+        # Recent Files
+        self.recent_files_menu = file_menu.addMenu("&Recent Files")
+        self._update_recent_files_menu()
 
         file_menu.addSeparator()
 
@@ -97,34 +200,35 @@ class MainWindow(QMainWindow):
         # Cut
         cut_action = QAction("Cu&t", self)
         cut_action.setShortcut(QKeySequence.StandardKey.Cut)
-        cut_action.triggered.connect(self.text_edit.cut)
+        cut_action.triggered.connect(lambda: self._get_current_text_edit().cut())
         edit_menu.addAction(cut_action)
 
         # Copy
         copy_action = QAction("&Copy", self)
         copy_action.setShortcut(QKeySequence.StandardKey.Copy)
-        copy_action.triggered.connect(self.text_edit.copy)
+        copy_action.triggered.connect(lambda: self._get_current_text_edit().copy())
         edit_menu.addAction(copy_action)
 
         # Paste
         paste_action = QAction("&Paste", self)
         paste_action.setShortcut(QKeySequence.StandardKey.Paste)
-        paste_action.triggered.connect(self.text_edit.paste)
+        paste_action.triggered.connect(lambda: self._get_current_text_edit().paste())
         edit_menu.addAction(paste_action)
 
-    def _create_text_editor(self):
-        """Create the main text editor widget."""
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        edit_menu.addSeparator()
 
-        layout = QVBoxLayout()
-        self.text_edit = QTextEdit()
-        self.text_edit.setFont(self.text_edit.font())
-        self.text_edit.textChanged.connect(self._on_text_changed)
-        self.text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
+        # Find and Replace
+        find_action = QAction("&Find and Replace", self)
+        find_action.setShortcut("Cmd+H")
+        find_action.triggered.connect(self._show_find_replace)
+        edit_menu.addAction(find_action)
 
-        layout.addWidget(self.text_edit)
-        central_widget.setLayout(layout)
+    def _create_find_replace_dialog(self):
+        """Create the find and replace dialog."""
+        self.find_replace_dialog = FindReplaceDialog(self)
+        self.find_replace_dialog.find_next_btn.clicked.connect(self._find_next)
+        self.find_replace_dialog.replace_btn.clicked.connect(self._replace_single)
+        self.find_replace_dialog.replace_all_btn.clicked.connect(self._replace_all)
 
     def _create_status_bar(self):
         """Create the status bar."""
@@ -134,45 +238,80 @@ class MainWindow(QMainWindow):
 
     def _update_title(self):
         """Update the window title based on document state."""
-        file_name = self.document.get_file_name()
-        modified_indicator = "*" if self.document.is_modified else ""
+        doc = self.tab_manager.get_active_document()
+        if doc is None:
+            self.setWindowTitle("jText")
+            return
+
+        file_name = doc.get_file_name()
+        modified_indicator = "*" if doc.is_modified else ""
         self.setWindowTitle(f"{file_name}{modified_indicator} - jText")
+
+        # Update tab title
+        current_index = self.tab_widget.currentIndex()
+        self.tab_widget.setTabText(current_index, f"{file_name}{modified_indicator}")
 
     def _update_status(self):
         """Update the status bar with file info."""
-        file_name = self.document.get_file_name()
-        modified_text = " (modified)" if self.document.is_modified else ""
-        self.status_bar_label.showMessage(f"{file_name}{modified_text}")
+        doc = self.tab_manager.get_active_document()
+        if doc is None:
+            self.status_bar_label.showMessage("No document")
+            return
+
+        file_name = doc.get_file_name()
+        modified_text = " (modified)" if doc.is_modified else ""
+        tab_count = self.tab_manager.get_tab_count()
+        self.status_bar_label.showMessage(
+            f"{file_name}{modified_text} | Tab {self.tab_widget.currentIndex() + 1} of {tab_count}"
+        )
         self._update_status_position()
 
     def _update_status_position(self):
         """Update cursor position in status bar."""
-        cursor = self.text_edit.textCursor()
+        text_edit = self._get_current_text_edit()
+        if text_edit is None:
+            return
+
+        cursor = text_edit.textCursor()
         line = cursor.blockNumber() + 1
         column = cursor.positionInBlock() + 1
-        position_text = f"{self.document.get_file_name()} - Line {line}, Column {column}"
-        if self.document.is_modified:
-            position_text += " (modified)"
+        position_text = f"Line {line}, Column {column}"
         self.status_bar_label.showMessage(position_text)
 
     def _on_text_changed(self):
         """Handle text change event."""
         if not self._is_loading:
-            self.document.content = self.text_edit.toPlainText()
-            self._update_title()
-            self._update_status()
+            doc = self.tab_manager.get_active_document()
+            if doc:
+                text_edit = self._get_current_text_edit()
+                if text_edit:
+                    doc.content = text_edit.toPlainText()
+                    self._update_title()
+                    self._update_status()
 
     def _on_cursor_position_changed(self):
         """Handle cursor position change."""
-        # Debounce position updates
         self._position_timer.start(100)
 
+    def _on_tab_changed(self, index):
+        """Handle tab change event."""
+        if index >= 0:
+            doc = self.tab_manager.get_active_document()
+            self.tab_manager.set_active_tab(index)
+
+            if doc:
+                text_edit = self._get_current_text_edit()
+                if text_edit:
+                    self._is_loading = True
+                    text_edit.setPlainText(doc.content)
+                    self._is_loading = False
+
+            self._update_title()
+            self._update_status()
+
     def _new_file(self):
-        """Create a new file."""
-        self.document = Document()
-        self._is_loading = True
-        self.text_edit.clear()
-        self._is_loading = False
+        """Create a new file in a new tab."""
+        self._add_new_tab()
         self._update_title()
         self._update_status()
 
@@ -187,10 +326,26 @@ class MainWindow(QMainWindow):
 
         if file_path:
             try:
-                self.document = FileManager.open_file(file_path)
+                doc = FileManager.open_file(file_path)
+                tab_index = self.tab_manager.add_tab(doc)
+
+                text_edit = QTextEdit()
+                text_edit.setFont(text_edit.font())
+                text_edit.textChanged.connect(self._on_text_changed)
+                text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
+
+                self._text_edit_widgets[tab_index] = text_edit
+                self.tab_widget.addTab(text_edit, doc.get_file_name())
+                self.tab_widget.setCurrentIndex(tab_index)
+
                 self._is_loading = True
-                self.text_edit.setPlainText(self.document.content)
+                text_edit.setPlainText(doc.content)
                 self._is_loading = False
+
+                # Add to recent files
+                self.recent_files.add_file(file_path)
+                self._update_recent_files_menu()
+
                 self._update_title()
                 self._update_status()
             except (FileNotFoundError, IOError) as e:
@@ -198,11 +353,17 @@ class MainWindow(QMainWindow):
 
     def _save_file(self):
         """Save the current file."""
+        doc = self.tab_manager.get_active_document()
+        if not doc:
+            return
+
         try:
-            if self.document.file_path is None:
+            if doc.file_path is None:
                 self._save_file_as()
             else:
-                FileManager.save_file(self.document)
+                FileManager.save_file(doc)
+                self.recent_files.add_file(doc.file_path)
+                self._update_recent_files_menu()
                 self._update_title()
                 self._update_status()
         except (ValueError, IOError) as e:
@@ -219,32 +380,235 @@ class MainWindow(QMainWindow):
 
         if file_path:
             try:
-                FileManager.save_as(self.document, file_path)
-                self._update_title()
-                self._update_status()
+                doc = self.tab_manager.get_active_document()
+                if doc:
+                    FileManager.save_as(doc, file_path)
+                    self.recent_files.add_file(file_path)
+                    self._update_recent_files_menu()
+                    self._update_title()
+                    self._update_status()
             except IOError as e:
                 self._show_error(f"Failed to save file: {e}")
 
+    def _close_tab(self):
+        """Close the current tab."""
+        current_index = self.tab_widget.currentIndex()
+
+        if current_index >= 0:
+            doc = self.tab_manager.get_document(current_index)
+            if doc and doc.is_modified:
+                reply = QMessageBox.question(
+                    self,
+                    "Unsaved Changes",
+                    f"'{doc.get_file_name()}' has unsaved changes. Save before closing?",
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.No
+                    | QMessageBox.StandardButton.Cancel,
+                )
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    self._save_file()
+                elif reply == QMessageBox.StandardButton.Cancel:
+                    return
+
+            if self.tab_manager.close_tab(current_index):
+                self.tab_widget.removeTab(current_index)
+                del self._text_edit_widgets[current_index]
+                self._update_title()
+                self._update_status()
+
     def _undo(self):
         """Undo the last change."""
-        if self.document.undo():
+        doc = self.tab_manager.get_active_document()
+        if doc and doc.undo():
             self._is_loading = True
-            self.text_edit.setPlainText(self.document.content)
+            text_edit = self._get_current_text_edit()
+            if text_edit:
+                text_edit.setPlainText(doc.content)
             self._is_loading = False
             self._update_title()
             self._update_status()
 
     def _redo(self):
         """Redo the last undone change."""
-        if self.document.redo():
+        doc = self.tab_manager.get_active_document()
+        if doc and doc.redo():
             self._is_loading = True
-            self.text_edit.setPlainText(self.document.content)
+            text_edit = self._get_current_text_edit()
+            if text_edit:
+                text_edit.setPlainText(doc.content)
             self._is_loading = False
             self._update_title()
             self._update_status()
 
+    def _show_find_replace(self):
+        """Show the find and replace dialog."""
+        self.find_replace_dialog.show()
+        self.find_replace_dialog.find_input.setFocus()
+        self._current_find_position = 0
+
+    def _find_next(self):
+        """Find next occurrence."""
+        text_edit = self._get_current_text_edit()
+        doc = self.tab_manager.get_active_document()
+        if not text_edit or not doc:
+            return
+
+        search_term = self.find_replace_dialog.find_input.text()
+        if not search_term:
+            return
+
+        # Update engine settings
+        self.find_replace_engine.set_case_sensitive(
+            self.find_replace_dialog.case_sensitive_check.isChecked()
+        )
+        self.find_replace_engine.set_whole_words(
+            self.find_replace_dialog.whole_words_check.isChecked()
+        )
+
+        # Find next
+        result = self.find_replace_engine.find_next(
+            doc.content, search_term, self._current_find_position
+        )
+
+        if result:
+            start, end = result
+            self._current_find_position = end
+
+            # Select the found text
+            cursor = text_edit.textCursor()
+            cursor.setPosition(start)
+            cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+            text_edit.setTextCursor(cursor)
+        else:
+            QMessageBox.information(
+                self, "Find", f"No more occurrences of '{search_term}' found."
+            )
+            self._current_find_position = 0
+
+    def _replace_single(self):
+        """Replace the first occurrence."""
+        doc = self.tab_manager.get_active_document()
+        if not doc:
+            return
+
+        search_term = self.find_replace_dialog.find_input.text()
+        replace_term = self.find_replace_dialog.replace_input.text()
+
+        if not search_term:
+            return
+
+        # Update engine settings
+        self.find_replace_engine.set_case_sensitive(
+            self.find_replace_dialog.case_sensitive_check.isChecked()
+        )
+        self.find_replace_engine.set_whole_words(
+            self.find_replace_dialog.whole_words_check.isChecked()
+        )
+
+        modified, count = self.find_replace_engine.replace(
+            doc.content, search_term, replace_term
+        )
+
+        if count > 0:
+            self._is_loading = True
+            doc.content = modified
+            text_edit = self._get_current_text_edit()
+            if text_edit:
+                text_edit.setPlainText(modified)
+            self._is_loading = False
+            QMessageBox.information(self, "Replace", f"Replaced {count} occurrence.")
+        else:
+            QMessageBox.information(
+                self, "Replace", f"No occurrences of '{search_term}' found."
+            )
+
+    def _replace_all(self):
+        """Replace all occurrences."""
+        doc = self.tab_manager.get_active_document()
+        if not doc:
+            return
+
+        search_term = self.find_replace_dialog.find_input.text()
+        replace_term = self.find_replace_dialog.replace_input.text()
+
+        if not search_term:
+            return
+
+        # Update engine settings
+        self.find_replace_engine.set_case_sensitive(
+            self.find_replace_dialog.case_sensitive_check.isChecked()
+        )
+        self.find_replace_engine.set_whole_words(
+            self.find_replace_dialog.whole_words_check.isChecked()
+        )
+
+        modified, count = self.find_replace_engine.replace_all(
+            doc.content, search_term, replace_term
+        )
+
+        if count > 0:
+            self._is_loading = True
+            doc.content = modified
+            text_edit = self._get_current_text_edit()
+            if text_edit:
+                text_edit.setPlainText(modified)
+            self._is_loading = False
+            QMessageBox.information(
+                self, "Replace All", f"Replaced {count} occurrences."
+            )
+        else:
+            QMessageBox.information(
+                self, "Replace All", f"No occurrences of '{search_term}' found."
+            )
+
+    def _update_recent_files_menu(self):
+        """Update the recent files menu."""
+        self.recent_files_menu.clear()
+
+        recent_files = self.recent_files.get_existing_recent_files()
+
+        if not recent_files:
+            self.recent_files_menu.addAction("(No recent files)").setEnabled(False)
+            return
+
+        for file_path in recent_files[:10]:
+            action = self.recent_files_menu.addAction(Path(file_path).name)
+            action.triggered.connect(lambda checked, path=file_path: self._open_recent_file(path))
+
+        self.recent_files_menu.addSeparator()
+        clear_action = self.recent_files_menu.addAction("Clear Recent Files")
+        clear_action.triggered.connect(self._clear_recent_files)
+
+    def _open_recent_file(self, file_path):
+        """Open a recent file."""
+        try:
+            doc = FileManager.open_file(file_path)
+            tab_index = self.tab_manager.add_tab(doc)
+
+            text_edit = QTextEdit()
+            text_edit.setFont(text_edit.font())
+            text_edit.textChanged.connect(self._on_text_changed)
+            text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
+
+            self._text_edit_widgets[tab_index] = text_edit
+            self.tab_widget.addTab(text_edit, doc.get_file_name())
+            self.tab_widget.setCurrentIndex(tab_index)
+
+            self._is_loading = True
+            text_edit.setPlainText(doc.content)
+            self._is_loading = False
+
+            self._update_title()
+            self._update_status()
+        except (FileNotFoundError, IOError) as e:
+            self._show_error(f"Failed to open file: {e}")
+
+    def _clear_recent_files(self):
+        """Clear the recent files list."""
+        self.recent_files.clear()
+        self._update_recent_files_menu()
+
     def _show_error(self, message: str):
         """Show an error message to the user."""
-        from PyQt6.QtWidgets import QMessageBox
-
         QMessageBox.critical(self, "Error", message)
