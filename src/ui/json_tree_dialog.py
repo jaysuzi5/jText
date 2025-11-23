@@ -32,15 +32,9 @@ class JsonTreeDialog(QDialog):
 
     def _setup_shortcuts(self) -> None:
         """Setup keyboard shortcuts."""
-        # Shortcut for expand all: Ctrl+E or Cmd+E
-        self.setShortcutEnabled(
-            self.addAction("Expand All (Cmd+E)"), True
-        )
-
-        # Shortcut for collapse all: Ctrl+L or Cmd+L
-        self.setShortcutEnabled(
-            self.addAction("Collapse All (Cmd+L)"), True
-        )
+        # Keyboard shortcuts are handled by the tree view buttons
+        # Users can click buttons or use Expand All / Collapse All
+        pass
 
     def load_json(self, json_str: str) -> bool:
         """Load JSON string into tree view.
