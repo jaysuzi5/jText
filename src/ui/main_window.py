@@ -20,7 +20,6 @@ from PyQt6.QtCore import Qt, QTimer
 from pathlib import Path
 from src.document import Document
 from src.file_manager import FileManager
-from src.tab_manager import TabManager
 from src.recent_files_manager import RecentFilesManager
 from src.find_replace import FindReplaceEngine
 
@@ -77,12 +76,16 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1000, 700)
 
         # Initialize managers
-        self.tab_manager = TabManager()
         self.recent_files = RecentFilesManager()
         self.find_replace_engine = FindReplaceEngine()
 
         self._is_loading = False
         self._current_find_position = 0
+
+        # Map tab widget indices to documents
+        # We use QTabWidget directly without TabManager for simpler management
+        self.documents = {}  # Maps tab_widget_index -> Document
+        self.text_edits = {}  # Maps tab_widget_index -> QTextEdit
 
         # Create UI (order matters: tab_widget must exist before menu_bar)
         self._create_tab_widget()
@@ -98,17 +101,22 @@ class MainWindow(QMainWindow):
     def _create_tab_widget(self):
         """Create the tab widget with text editors."""
         self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)
         self.setCentralWidget(self.tab_widget)
 
         # Add initial blank tab
         self._add_new_tab()
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        self.tab_widget.tabCloseRequested.connect(self._on_tab_close_requested)
 
-    def _add_new_tab(self):
-        """Add a new tab with a blank document."""
-        # Create document
-        doc = Document()
-        tab_index = self.tab_manager.add_tab(doc)
+    def _add_new_tab(self, document=None):
+        """Add a new tab with a document.
+
+        Args:
+            document: Document to add (creates empty if None)
+        """
+        if document is None:
+            document = Document()
 
         # Create text editor
         text_edit = QTextEdit()
@@ -116,19 +124,38 @@ class MainWindow(QMainWindow):
         text_edit.textChanged.connect(self._on_text_changed)
         text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
 
-        # Store text edit reference in tab_manager for access
-        self._text_edit_widgets = getattr(self, "_text_edit_widgets", {})
-        self._text_edit_widgets[tab_index] = text_edit
+        # Add to tab widget and get index
+        tab_index = self.tab_widget.addTab(text_edit, document.get_file_name())
 
-        # Add to tab widget
-        self.tab_widget.addTab(text_edit, "Untitled")
+        # Store document and text edit
+        self.documents[tab_index] = document
+        self.text_edits[tab_index] = text_edit
+
+        # Load content if exists
+        if document.content:
+            self._is_loading = True
+            text_edit.setPlainText(document.content)
+            self._is_loading = False
+
+        # Make this the active tab
         self.tab_widget.setCurrentIndex(tab_index)
+
+    def _get_current_tab_index(self):
+        """Get the current active tab index."""
+        return self.tab_widget.currentIndex()
+
+    def _get_current_document(self):
+        """Get the currently active document."""
+        index = self._get_current_tab_index()
+        if index >= 0:
+            return self.documents.get(index)
+        return None
 
     def _get_current_text_edit(self):
         """Get the current active text editor."""
-        current_index = self.tab_widget.currentIndex()
-        if current_index >= 0:
-            return self._text_edit_widgets.get(current_index)
+        index = self._get_current_tab_index()
+        if index >= 0:
+            return self.text_edits.get(index)
         return None
 
     def _create_menu_bar(self):
@@ -163,7 +190,7 @@ class MainWindow(QMainWindow):
         # Close Tab
         close_tab_action = QAction("&Close Tab", self)
         close_tab_action.setShortcut("Cmd+W")
-        close_tab_action.triggered.connect(self._close_tab)
+        close_tab_action.triggered.connect(self._close_current_tab)
         file_menu.addAction(close_tab_action)
 
         file_menu.addSeparator()
@@ -200,19 +227,19 @@ class MainWindow(QMainWindow):
         # Cut
         cut_action = QAction("Cu&t", self)
         cut_action.setShortcut(QKeySequence.StandardKey.Cut)
-        cut_action.triggered.connect(lambda: self._get_current_text_edit().cut())
+        cut_action.triggered.connect(lambda: self._get_current_text_edit() and self._get_current_text_edit().cut())
         edit_menu.addAction(cut_action)
 
         # Copy
         copy_action = QAction("&Copy", self)
         copy_action.setShortcut(QKeySequence.StandardKey.Copy)
-        copy_action.triggered.connect(lambda: self._get_current_text_edit().copy())
+        copy_action.triggered.connect(lambda: self._get_current_text_edit() and self._get_current_text_edit().copy())
         edit_menu.addAction(copy_action)
 
         # Paste
         paste_action = QAction("&Paste", self)
         paste_action.setShortcut(QKeySequence.StandardKey.Paste)
-        paste_action.triggered.connect(lambda: self._get_current_text_edit().paste())
+        paste_action.triggered.connect(lambda: self._get_current_text_edit() and self._get_current_text_edit().paste())
         edit_menu.addAction(paste_action)
 
         edit_menu.addSeparator()
@@ -238,7 +265,7 @@ class MainWindow(QMainWindow):
 
     def _update_title(self):
         """Update the window title based on document state."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if doc is None:
             self.setWindowTitle("jText")
             return
@@ -248,21 +275,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{file_name}{modified_indicator} - jText")
 
         # Update tab title
-        current_index = self.tab_widget.currentIndex()
-        self.tab_widget.setTabText(current_index, f"{file_name}{modified_indicator}")
+        tab_index = self._get_current_tab_index()
+        if tab_index >= 0:
+            self.tab_widget.setTabText(tab_index, f"{file_name}{modified_indicator}")
 
     def _update_status(self):
         """Update the status bar with file info."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if doc is None:
             self.status_bar_label.showMessage("No document")
             return
 
         file_name = doc.get_file_name()
         modified_text = " (modified)" if doc.is_modified else ""
-        tab_count = self.tab_manager.get_tab_count()
+        tab_count = self.tab_widget.count()
+        current_tab = self._get_current_tab_index() + 1
         self.status_bar_label.showMessage(
-            f"{file_name}{modified_text} | Tab {self.tab_widget.currentIndex() + 1} of {tab_count}"
+            f"{file_name}{modified_text} | Tab {current_tab} of {tab_count}"
         )
         self._update_status_position()
 
@@ -281,13 +310,12 @@ class MainWindow(QMainWindow):
     def _on_text_changed(self):
         """Handle text change event."""
         if not self._is_loading:
-            doc = self.tab_manager.get_active_document()
-            if doc:
-                text_edit = self._get_current_text_edit()
-                if text_edit:
-                    doc.content = text_edit.toPlainText()
-                    self._update_title()
-                    self._update_status()
+            doc = self._get_current_document()
+            text_edit = self._get_current_text_edit()
+            if doc and text_edit:
+                doc.content = text_edit.toPlainText()
+                self._update_title()
+                self._update_status()
 
     def _on_cursor_position_changed(self):
         """Handle cursor position change."""
@@ -296,24 +324,49 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index):
         """Handle tab change event."""
         if index >= 0:
-            doc = self.tab_manager.get_active_document()
-            self.tab_manager.set_active_tab(index)
+            doc = self.documents.get(index)
+            text_edit = self.text_edits.get(index)
 
-            if doc:
-                text_edit = self._get_current_text_edit()
-                if text_edit:
-                    self._is_loading = True
-                    text_edit.setPlainText(doc.content)
-                    self._is_loading = False
+            if doc and text_edit:
+                self._is_loading = True
+                text_edit.setPlainText(doc.content)
+                self._is_loading = False
 
             self._update_title()
             self._update_status()
 
+    def _on_tab_close_requested(self, index):
+        """Handle tab close button click."""
+        doc = self.documents.get(index)
+        if doc and doc.is_modified:
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                f"'{doc.get_file_name()}' has unsaved changes. Save before closing?",
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Cancel,
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                self._save_file_at_index(index)
+            elif reply == QMessageBox.StandardButton.Cancel:
+                return
+
+        # Check if we're about to close the last tab
+        if self.tab_widget.count() <= 1:
+            QMessageBox.information(self, "Close Tab", "Cannot close the last tab. Use File → Exit to quit.")
+            return
+
+        self.tab_widget.removeTab(index)
+        if index in self.documents:
+            del self.documents[index]
+        if index in self.text_edits:
+            del self.text_edits[index]
+
     def _new_file(self):
         """Create a new file in a new tab."""
         self._add_new_tab()
-        self._update_title()
-        self._update_status()
 
     def _open_file(self):
         """Open a file dialog and load file."""
@@ -327,33 +380,15 @@ class MainWindow(QMainWindow):
         if file_path:
             try:
                 doc = FileManager.open_file(file_path)
-                tab_index = self.tab_manager.add_tab(doc)
-
-                text_edit = QTextEdit()
-                text_edit.setFont(text_edit.font())
-                text_edit.textChanged.connect(self._on_text_changed)
-                text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
-
-                self._text_edit_widgets[tab_index] = text_edit
-                self.tab_widget.addTab(text_edit, doc.get_file_name())
-                self.tab_widget.setCurrentIndex(tab_index)
-
-                self._is_loading = True
-                text_edit.setPlainText(doc.content)
-                self._is_loading = False
-
-                # Add to recent files
+                self._add_new_tab(doc)
                 self.recent_files.add_file(file_path)
                 self._update_recent_files_menu()
-
-                self._update_title()
-                self._update_status()
             except (FileNotFoundError, IOError) as e:
                 self._show_error(f"Failed to open file: {e}")
 
     def _save_file(self):
         """Save the current file."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if not doc:
             return
 
@@ -369,6 +404,31 @@ class MainWindow(QMainWindow):
         except (ValueError, IOError) as e:
             self._show_error(f"Failed to save file: {e}")
 
+    def _save_file_at_index(self, index):
+        """Save file at specific tab index."""
+        doc = self.documents.get(index)
+        if not doc:
+            return
+
+        try:
+            if doc.file_path is None:
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Save File As",
+                    str(Path.home()),
+                    "Text Files (*.txt);;Python Files (*.py);;JSON Files (*.json);;All Files (*)",
+                )
+                if file_path:
+                    FileManager.save_as(doc, file_path)
+                    self.recent_files.add_file(file_path)
+                    self._update_recent_files_menu()
+            else:
+                FileManager.save_file(doc)
+                self.recent_files.add_file(doc.file_path)
+                self._update_recent_files_menu()
+        except (ValueError, IOError) as e:
+            self._show_error(f"Failed to save file: {e}")
+
     def _save_file_as(self):
         """Save the file with a new name."""
         file_path, _ = QFileDialog.getSaveFileName(
@@ -380,7 +440,7 @@ class MainWindow(QMainWindow):
 
         if file_path:
             try:
-                doc = self.tab_manager.get_active_document()
+                doc = self._get_current_document()
                 if doc:
                     FileManager.save_as(doc, file_path)
                     self.recent_files.add_file(file_path)
@@ -390,36 +450,15 @@ class MainWindow(QMainWindow):
             except IOError as e:
                 self._show_error(f"Failed to save file: {e}")
 
-    def _close_tab(self):
+    def _close_current_tab(self):
         """Close the current tab."""
-        current_index = self.tab_widget.currentIndex()
-
-        if current_index >= 0:
-            doc = self.tab_manager.get_document(current_index)
-            if doc and doc.is_modified:
-                reply = QMessageBox.question(
-                    self,
-                    "Unsaved Changes",
-                    f"'{doc.get_file_name()}' has unsaved changes. Save before closing?",
-                    QMessageBox.StandardButton.Yes
-                    | QMessageBox.StandardButton.No
-                    | QMessageBox.StandardButton.Cancel,
-                )
-
-                if reply == QMessageBox.StandardButton.Yes:
-                    self._save_file()
-                elif reply == QMessageBox.StandardButton.Cancel:
-                    return
-
-            if self.tab_manager.close_tab(current_index):
-                self.tab_widget.removeTab(current_index)
-                del self._text_edit_widgets[current_index]
-                self._update_title()
-                self._update_status()
+        index = self._get_current_tab_index()
+        if index >= 0:
+            self._on_tab_close_requested(index)
 
     def _undo(self):
         """Undo the last change."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if doc and doc.undo():
             self._is_loading = True
             text_edit = self._get_current_text_edit()
@@ -431,7 +470,7 @@ class MainWindow(QMainWindow):
 
     def _redo(self):
         """Redo the last undone change."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if doc and doc.redo():
             self._is_loading = True
             text_edit = self._get_current_text_edit()
@@ -450,7 +489,7 @@ class MainWindow(QMainWindow):
     def _find_next(self):
         """Find next occurrence."""
         text_edit = self._get_current_text_edit()
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if not text_edit or not doc:
             return
 
@@ -488,7 +527,7 @@ class MainWindow(QMainWindow):
 
     def _replace_single(self):
         """Replace the first occurrence."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if not doc:
             return
 
@@ -525,7 +564,7 @@ class MainWindow(QMainWindow):
 
     def _replace_all(self):
         """Replace all occurrences."""
-        doc = self.tab_manager.get_active_document()
+        doc = self._get_current_document()
         if not doc:
             return
 
@@ -584,23 +623,7 @@ class MainWindow(QMainWindow):
         """Open a recent file."""
         try:
             doc = FileManager.open_file(file_path)
-            tab_index = self.tab_manager.add_tab(doc)
-
-            text_edit = QTextEdit()
-            text_edit.setFont(text_edit.font())
-            text_edit.textChanged.connect(self._on_text_changed)
-            text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
-
-            self._text_edit_widgets[tab_index] = text_edit
-            self.tab_widget.addTab(text_edit, doc.get_file_name())
-            self.tab_widget.setCurrentIndex(tab_index)
-
-            self._is_loading = True
-            text_edit.setPlainText(doc.content)
-            self._is_loading = False
-
-            self._update_title()
-            self._update_status()
+            self._add_new_tab(doc)
         except (FileNotFoundError, IOError) as e:
             self._show_error(f"Failed to open file: {e}")
 
