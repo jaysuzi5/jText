@@ -3,7 +3,6 @@
 from PyQt6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
-    QWidget,
     QTextEdit,
     QStatusBar,
     QFileDialog,
@@ -16,7 +15,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtGui import QKeySequence, QAction, QTextCursor
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QTimer
 from pathlib import Path
 from src.document import Document
 from src.file_manager import FileManager
