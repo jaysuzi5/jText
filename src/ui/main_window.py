@@ -305,13 +305,6 @@ class MainWindow(QMainWindow):
         self.show_whitespace_action.triggered.connect(self._toggle_whitespace_indicators)
         view_menu.addAction(self.show_whitespace_action)
 
-        # Show line endings
-        self.show_line_endings_action = QAction("Show &Line Endings", self)
-        self.show_line_endings_action.setCheckable(True)
-        self.show_line_endings_action.setChecked(False)
-        self.show_line_endings_action.triggered.connect(self._toggle_line_ending_indicators)
-        view_menu.addAction(self.show_line_endings_action)
-
         # JSON menu
         json_menu = self.menuBar().addMenu("&JSON")
 
@@ -879,11 +872,3 @@ class MainWindow(QMainWindow):
             show_whitespace = self.show_whitespace_action.isChecked()
             highlighter = self.visual_highlighters[index]
             highlighter.set_show_whitespace(show_whitespace)
-
-    def _toggle_line_ending_indicators(self):
-        """Toggle line ending indicator display."""
-        index = self._get_current_tab_index()
-        if index >= 0 and index in self.visual_highlighters:
-            show_line_endings = self.show_line_endings_action.isChecked()
-            highlighter = self.visual_highlighters[index]
-            highlighter.set_show_line_endings(show_line_endings)
