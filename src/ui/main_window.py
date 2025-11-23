@@ -24,6 +24,8 @@ from src.find_replace import FindReplaceEngine
 from src.json_handler import JsonHandler
 from src.json_syntax_highlighter import JsonSyntaxHighlighter
 from src.ui.json_tree_dialog import JsonTreeDialog
+from src.theme_manager import ThemeManager
+from src.visual_indicators import LineEndingDetector, WhitespaceAnalyzer
 
 
 class FindReplaceDialog(QDialog):
@@ -78,12 +80,16 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1000, 700)
 
         # Initialize managers
+        self.theme_manager = ThemeManager()
         self.recent_files = RecentFilesManager()
         self.find_replace_engine = FindReplaceEngine()
         self.json_tree_dialog: JsonTreeDialog | None = None
 
         self._is_loading = False
         self._current_find_position = 0
+        self._current_line_ending = None
+        self._current_indent_style = None
+        self._current_indent_size = 4
 
         # Map tab widget indices to documents
         # We use QTabWidget directly without TabManager for simpler management
@@ -96,6 +102,9 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._create_status_bar()
         self._create_find_replace_dialog()
+
+        # Apply theme stylesheet
+        self._apply_theme()
 
         # Timer for updating status bar position (debounced)
         self._position_timer = QTimer()
@@ -151,6 +160,9 @@ class MainWindow(QMainWindow):
             self._is_loading = True
             text_edit.setPlainText(document.content)
             self._is_loading = False
+
+        # Analyze document properties
+        self._analyze_document_properties(document)
 
         # Make this the active tab
         self.tab_widget.setCurrentIndex(tab_index)
@@ -265,6 +277,35 @@ class MainWindow(QMainWindow):
         find_action.triggered.connect(self._show_find_replace)
         edit_menu.addAction(find_action)
 
+        # View menu
+        view_menu = self.menuBar().addMenu("&View")
+
+        # Toggle theme
+        toggle_theme_action = QAction("Toggle &Dark/Light Theme", self)
+        toggle_theme_action.setShortcut("Cmd+T")
+        toggle_theme_action.triggered.connect(self._toggle_theme)
+        view_menu.addAction(toggle_theme_action)
+
+        # Select theme submenu
+        self.theme_submenu = view_menu.addMenu("Select &Theme")
+        self._update_theme_menu()
+
+        view_menu.addSeparator()
+
+        # Show whitespace
+        self.show_whitespace_action = QAction("Show &Whitespace", self)
+        self.show_whitespace_action.setCheckable(True)
+        self.show_whitespace_action.setChecked(False)
+        self.show_whitespace_action.triggered.connect(self._toggle_whitespace_indicators)
+        view_menu.addAction(self.show_whitespace_action)
+
+        # Show line endings
+        self.show_line_endings_action = QAction("Show &Line Endings", self)
+        self.show_line_endings_action.setCheckable(True)
+        self.show_line_endings_action.setChecked(False)
+        self.show_line_endings_action.triggered.connect(self._toggle_line_ending_indicators)
+        view_menu.addAction(self.show_line_endings_action)
+
         # JSON menu
         json_menu = self.menuBar().addMenu("&JSON")
 
@@ -331,8 +372,17 @@ class MainWindow(QMainWindow):
         modified_text = " (modified)" if doc.is_modified else ""
         tab_count = self.tab_widget.count()
         current_tab = self._get_current_tab_index() + 1
+
+        # Analyze document properties if not already done
+        if self._current_line_ending is None or self._current_indent_style is None:
+            self._analyze_document_properties(doc)
+
+        # Build status message with line ending and indentation info
+        line_ending_str = self._current_line_ending.display_name() if self._current_line_ending else "LF"
+        indent_str = f"{self._current_indent_style} ({self._current_indent_size})" if self._current_indent_style != "none" else "no indent"
+
         self.status_bar_label.showMessage(
-            f"{file_name}{modified_text} | Tab {current_tab} of {tab_count}"
+            f"{file_name}{modified_text} | {line_ending_str} | {indent_str} | Tab {current_tab} of {tab_count}"
         )
         self._update_status_position()
 
@@ -373,6 +423,8 @@ class MainWindow(QMainWindow):
                 text_edit.setPlainText(doc.content)
                 self._is_loading = False
 
+            # Analyze document properties for new tab
+            self._analyze_document_properties(doc)
             self._update_title()
             self._update_status()
 
@@ -772,3 +824,58 @@ class MainWindow(QMainWindow):
             self.json_tree_dialog.activateWindow()
         else:
             QMessageBox.warning(self, "Error", "Failed to load JSON into tree view.")
+
+    def _apply_theme(self):
+        """Apply the current theme stylesheet to the window."""
+        stylesheet = self.theme_manager.get_stylesheet()
+        self.setStyleSheet(stylesheet)
+
+    def _toggle_theme(self):
+        """Toggle between light and dark themes."""
+        self.theme_manager.toggle_theme()
+        self._apply_theme()
+
+    def _update_theme_menu(self):
+        """Update the theme selector menu with available themes."""
+        self.theme_submenu.clear()
+        available_themes = self.theme_manager.get_available_themes()
+
+        for theme_name in sorted(available_themes):
+            action = self.theme_submenu.addAction(theme_name.capitalize())
+            action.triggered.connect(lambda checked, name=theme_name: self._select_theme(name))
+
+    def _select_theme(self, theme_name):
+        """Select a theme by name."""
+        if self.theme_manager.set_theme(theme_name):
+            self._apply_theme()
+
+    def _analyze_document_properties(self, doc):
+        """Analyze document to detect line endings and indentation style."""
+        if not doc:
+            self._current_line_ending = LineEndingDetector.detect("")
+            self._current_indent_style = "none"
+            self._current_indent_size = 4
+            return
+
+        # Detect line ending
+        self._current_line_ending = LineEndingDetector.detect(doc.content)
+
+        # Detect indentation
+        self._current_indent_style = WhitespaceAnalyzer.get_indentation_style(doc.content)
+        self._current_indent_size = WhitespaceAnalyzer.get_indent_size(doc.content)
+
+    def _toggle_whitespace_indicators(self):
+        """Toggle whitespace indicator display."""
+        text_edit = self._get_current_text_edit()
+        if text_edit:
+            # This is a placeholder - actual visual indicator rendering would
+            # be implemented in the text editor widget itself
+            pass
+
+    def _toggle_line_ending_indicators(self):
+        """Toggle line ending indicator display."""
+        text_edit = self._get_current_text_edit()
+        if text_edit:
+            # This is a placeholder - actual visual indicator rendering would
+            # be implemented in the text editor widget itself
+            pass
