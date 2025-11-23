@@ -283,6 +283,9 @@ class MainWindow(QMainWindow):
         find_action.triggered.connect(self._show_find_replace)
         edit_menu.addAction(find_action)
 
+        # Remove macOS Writing Tools from Edit menu (if present)
+        self._remove_writing_tools_from_menu(edit_menu)
+
         # View menu
         view_menu = self.menuBar().addMenu("&View")
 
@@ -864,6 +867,20 @@ class MainWindow(QMainWindow):
         # Detect indentation
         self._current_indent_style = WhitespaceAnalyzer.get_indentation_style(doc.content)
         self._current_indent_size = WhitespaceAnalyzer.get_indent_size(doc.content)
+
+    def _remove_writing_tools_from_menu(self, menu):
+        """Remove macOS Writing Tools action from a menu.
+
+        macOS automatically injects Writing Tools into Edit menu on newer systems.
+        This method removes it to keep the UI clean.
+
+        Args:
+            menu: QMenu to remove Writing Tools from
+        """
+        for action in menu.actions():
+            if action.text() and "Writing Tools" in action.text():
+                menu.removeAction(action)
+                break
 
     def _toggle_whitespace_indicators(self):
         """Toggle whitespace indicator display."""
