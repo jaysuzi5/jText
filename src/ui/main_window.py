@@ -26,6 +26,7 @@ from src.json_syntax_highlighter import JsonSyntaxHighlighter
 from src.ui.json_tree_dialog import JsonTreeDialog
 from src.theme_manager import ThemeManager
 from src.visual_indicators import LineEndingDetector, WhitespaceAnalyzer
+from src.ui.visual_indicator_renderer import VisualIndicatorHighlighter
 
 
 class FindReplaceDialog(QDialog):
@@ -96,6 +97,7 @@ class MainWindow(QMainWindow):
         self.documents = {}  # Maps tab_widget_index -> Document
         self.text_edits = {}  # Maps tab_widget_index -> QTextEdit
         self.highlighters = {}  # Maps tab_widget_index -> JsonSyntaxHighlighter
+        self.visual_highlighters = {}  # Maps tab_widget_index -> VisualIndicatorHighlighter
 
         # Create UI (order matters: tab_widget must exist before menu_bar)
         self._create_tab_widget()
@@ -143,6 +145,10 @@ class MainWindow(QMainWindow):
         # Store document and text edit
         self.documents[tab_index] = document
         self.text_edits[tab_index] = text_edit
+
+        # Always add visual indicator highlighter
+        visual_highlighter = VisualIndicatorHighlighter(text_edit.document())
+        self.visual_highlighters[tab_index] = visual_highlighter
 
         # Check if this is a JSON file and apply syntax highlighting
         is_json = False
@@ -458,6 +464,8 @@ class MainWindow(QMainWindow):
             del self.text_edits[index]
         if index in self.highlighters:
             del self.highlighters[index]
+        if index in self.visual_highlighters:
+            del self.visual_highlighters[index]
 
     def _new_file(self):
         """Create a new file in a new tab."""
@@ -866,16 +874,16 @@ class MainWindow(QMainWindow):
 
     def _toggle_whitespace_indicators(self):
         """Toggle whitespace indicator display."""
-        text_edit = self._get_current_text_edit()
-        if text_edit:
-            # This is a placeholder - actual visual indicator rendering would
-            # be implemented in the text editor widget itself
-            pass
+        index = self._get_current_tab_index()
+        if index >= 0 and index in self.visual_highlighters:
+            show_whitespace = self.show_whitespace_action.isChecked()
+            highlighter = self.visual_highlighters[index]
+            highlighter.set_show_whitespace(show_whitespace)
 
     def _toggle_line_ending_indicators(self):
         """Toggle line ending indicator display."""
-        text_edit = self._get_current_text_edit()
-        if text_edit:
-            # This is a placeholder - actual visual indicator rendering would
-            # be implemented in the text editor widget itself
-            pass
+        index = self._get_current_tab_index()
+        if index >= 0 and index in self.visual_highlighters:
+            show_line_endings = self.show_line_endings_action.isChecked()
+            highlighter = self.visual_highlighters[index]
+            highlighter.set_show_line_endings(show_line_endings)
