@@ -23,6 +23,7 @@ from src.recent_files_manager import RecentFilesManager
 from src.find_replace import FindReplaceEngine
 from src.json_handler import JsonHandler
 from src.json_syntax_highlighter import JsonSyntaxHighlighter
+from src.ui.json_tree_dialog import JsonTreeDialog
 
 
 class FindReplaceDialog(QDialog):
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
         # Initialize managers
         self.recent_files = RecentFilesManager()
         self.find_replace_engine = FindReplaceEngine()
+        self.json_tree_dialog: JsonTreeDialog | None = None
 
         self._is_loading = False
         self._current_find_position = 0
@@ -280,6 +282,14 @@ class MainWindow(QMainWindow):
         validate_json_action = QAction("&Validate JSON", self)
         validate_json_action.triggered.connect(self._validate_json)
         json_menu.addAction(validate_json_action)
+
+        json_menu.addSeparator()
+
+        # View JSON Tree
+        view_tree_action = QAction("&View JSON Tree", self)
+        view_tree_action.setShortcut("Cmd+J")
+        view_tree_action.triggered.connect(self._show_json_tree)
+        json_menu.addAction(view_tree_action)
 
     def _create_find_replace_dialog(self):
         """Create the find and replace dialog."""
@@ -734,3 +744,31 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Validate JSON", "JSON is valid!")
         else:
             QMessageBox.warning(self, "Validate JSON", f"JSON validation failed:\n{error}")
+
+    def _show_json_tree(self):
+        """Show JSON tree view dialog."""
+        doc = self._get_current_document()
+        if not doc:
+            return
+
+        # Validate JSON first
+        is_valid, error = JsonHandler.validate_json(doc.content)
+        if not is_valid:
+            QMessageBox.warning(
+                self,
+                "Invalid JSON",
+                f"Cannot display tree view for invalid JSON:\n{error}",
+            )
+            return
+
+        # Create dialog if not exists
+        if self.json_tree_dialog is None:
+            self.json_tree_dialog = JsonTreeDialog(self)
+
+        # Load JSON into tree view
+        if self.json_tree_dialog.load_json(doc.content):
+            self.json_tree_dialog.show()
+            self.json_tree_dialog.raise_()
+            self.json_tree_dialog.activateWindow()
+        else:
+            QMessageBox.warning(self, "Error", "Failed to load JSON into tree view.")
