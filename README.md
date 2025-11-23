@@ -16,6 +16,7 @@ A lightweight, feature-rich text editor for macOS designed as a Notepad++ altern
 - **Keyboard Shortcuts** - All standard macOS keyboard shortcuts
 - **Multiple File Types** - Works with .txt, .py, .json, and any text file
 - **JSON Support** - Syntax highlighting, formatting, minification, and validation for JSON files
+- **JSON Tree View** - Expand/collapse hierarchical view of JSON structure with visual tree navigation
 
 ### Future Enhancements
 - Line numbers display
@@ -94,6 +95,7 @@ The application window will open with a blank document ready for editing.
 | **Cmd+C** | Copy |
 | **Cmd+V** | Paste |
 | **Cmd+H** | Find and Replace |
+| **Cmd+J** | View JSON Tree (expandable/collapsible) |
 | **Cmd+Q** | Quit Application |
 
 ### JSON Operations
@@ -105,6 +107,7 @@ When editing JSON files (detected by `.json` extension or JSON content), the fol
 | **JSON → Format JSON** | Pretty-print the JSON with proper indentation and formatting |
 | **JSON → Minify JSON** | Remove all whitespace and reduce file size |
 | **JSON → Validate JSON** | Check JSON syntax and display any errors found |
+| **JSON → View JSON Tree** | Open expandable/collapsible tree view of JSON structure |
 
 **Color-Coded Syntax Highlighting for JSON:**
 - **Blue (Bold)** - Object keys
@@ -112,6 +115,22 @@ When editing JSON files (detected by `.json` extension or JSON content), the fol
 - **Orange** - Numbers
 - **Red (Bold)** - Boolean values (true/false) and null
 - **Gray (Bold)** - Brackets and structural characters
+
+### JSON Tree View
+
+**Accessing the Tree View:**
+- Press `Cmd+J` or go to JSON → View JSON Tree
+- Opens in a separate window with interactive tree structure
+- Shows count of items/keys for containers
+- Each node can be expanded or collapsed by clicking
+
+**Tree Navigation:**
+- **Click node arrow** - Toggle expand/collapse for that node
+- **Expand All button** - Expand entire tree hierarchy
+- **Collapse All button** - Collapse entire tree to root level
+- **Color-coded nodes** - Same color scheme as syntax highlighting
+  - Objects and arrays show item count
+  - Primitives show formatted values with truncation for long strings
 
 ### File Operations
 
@@ -204,7 +223,7 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ### Test Coverage
 
-- **168 unit tests** covering all core functionality
+- **198 unit tests** covering all core functionality
 - **97-100% coverage** on core modules:
   - Document: 100% (21 tests)
   - FileManager: 100% (24 tests)
@@ -212,6 +231,7 @@ uv run pytest tests/ --cov=src --cov-report=html
   - RecentFilesManager: 94% (21 tests)
   - FindReplaceEngine: 97% (40 tests)
   - JsonHandler: 100% (38 tests)
+  - JsonTreeModel: 100% (30 tests)
 - All tests pass before each commit
 
 ### Project Structure
@@ -226,15 +246,19 @@ jText/
 │   ├── find_replace.py          # Find and replace engine (40 tests)
 │   ├── json_handler.py          # JSON operations (38 tests)
 │   ├── json_syntax_highlighter.py # JSON syntax highlighting
+│   ├── json_tree_model.py       # JSON hierarchical tree model (30 tests)
+│   ├── json_tree_view.py        # JSON tree view widget
 │   └── ui/
-│       └── main_window.py       # PyQt6 main application window
+│       ├── main_window.py       # PyQt6 main application window
+│       └── json_tree_dialog.py  # JSON tree view dialog
 ├── tests/
 │   ├── test_document.py
 │   ├── test_file_manager.py
 │   ├── test_tab_manager.py
 │   ├── test_recent_files_manager.py
 │   ├── test_find_replace.py
-│   └── test_json_handler.py
+│   ├── test_json_handler.py
+│   └── test_json_tree_model.py
 ├── main.py                       # Application entry point
 ├── CLAUDE.md                     # Development guide for Claude Code
 ├── pyproject.toml               # uv project configuration
