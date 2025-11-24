@@ -5,24 +5,49 @@ A lightweight, feature-rich text editor for macOS designed as a Notepad++ altern
 ## Features
 
 ### Current Release
+
+#### Core Editing
 - **Multiple Tabs** - Edit multiple files simultaneously in separate tabs
 - **Open & Edit Files** - Open text files and edit them in a clean interface
 - **Save Files** - Save your work with Save and Save As options
-- **Find & Replace** - Advanced find and replace with case sensitivity and whole-words options
-- **Recent Files** - Quick access to recently opened files from File menu
 - **Copy & Paste** - Full clipboard support for text manipulation
 - **Undo/Redo** - Complete undo/redo history for all changes
 - **Status Bar** - Real-time display of file name, modification state, cursor position, and tab info
 - **Keyboard Shortcuts** - All standard macOS keyboard shortcuts
 - **Multiple File Types** - Works with .txt, .py, .json, and any text file
-- **JSON Support** - Syntax highlighting, formatting, minification, and validation for JSON files
-- **JSON Tree View** - Expand/collapse hierarchical view of JSON structure with visual tree navigation
+
+#### Visual Polish
+- **Dark/Light Themes** - Toggle between light and dark color schemes (Cmd+T)
+- **Theme Selection** - Choose from available themes in View menu
+- **Whitespace Indicators** - Optional display of spaces and tabs with visual highlighting
+- **Line Ending Detection** - Auto-detect and display line ending type (LF, CRLF, CR)
+- **Indentation Analysis** - Auto-detect indentation style (spaces vs tabs) and size (2, 4, 8)
+
+#### JSON Support
+- **JSON Syntax Highlighting** - Color-coded syntax with proper formatting
+- **JSON Operations** - Format, minify, and validate JSON files
+- **JSON Tree View** - Expand/collapse hierarchical view of JSON structure with visual tree navigation (Cmd+J)
+
+#### Find & Replace
+- **Advanced Search** - Find and replace with case sensitivity and whole-words options
+- **Search History** - Keep track of recent searches and access them quickly
+- **Regex Support** - Full regex pattern support for advanced searching
+- **Find Navigation** - Find next/previous with result highlighting and counting
+- **Replace Operations** - Single or bulk replace functionality
+
+#### Advanced Text Editing
+- **Code Folding** - Fold/unfold code regions for functions, classes, and blocks
+- **Text Transformation** - Convert text case: uppercase, lowercase, title case, camelCase, snake_case
+- **Line Operations** - Sort lines, reverse line order, remove duplicates, remove empty lines
+- **Smart Indentation** - Auto-indent based on code structure, detect indent size and style
+- **Code Snippets** - 18 built-in snippets for Python and JavaScript with placeholder expansion
+- **Multi-Cursor Support** - Edit multiple locations simultaneously
 
 ### Future Enhancements
 - Line numbers display
-- Customizable themes
-- Advanced search and navigation features
-- Language support for more file types
+- Language support for more file types (Python, HTML, CSS syntax highlighting)
+- Plugin system for extensibility
+- Additional code snippet library
 
 ## System Requirements
 
@@ -82,6 +107,7 @@ The application window will open with a blank document ready for editing.
 
 ### Keyboard Shortcuts
 
+#### File & Navigation
 | Shortcut | Action |
 |----------|--------|
 | **Cmd+N** | New Tab |
@@ -89,14 +115,39 @@ The application window will open with a blank document ready for editing.
 | **Cmd+S** | Save |
 | **Cmd+Shift+S** | Save As |
 | **Cmd+W** | Close Tab |
+| **Cmd+Q** | Quit Application |
+
+#### Editing
+| Shortcut | Action |
+|----------|--------|
 | **Cmd+Z** | Undo |
 | **Cmd+Shift+Z** | Redo |
 | **Cmd+X** | Cut |
 | **Cmd+C** | Copy |
 | **Cmd+V** | Paste |
+| **Tab** | Indent Selection |
+| **Shift+Tab** | Dedent Selection |
+
+#### Search & Replace
+| Shortcut | Action |
+|----------|--------|
 | **Cmd+H** | Find and Replace |
-| **Cmd+J** | View JSON Tree (expandable/collapsible) |
-| **Cmd+Q** | Quit Application |
+
+#### View & Theme
+| Shortcut | Action |
+|----------|--------|
+| **Cmd+T** | Toggle Dark/Light Theme |
+| **Cmd+J** | View JSON Tree |
+
+#### Advanced Text Editing (Tools Menu)
+| Shortcut | Action |
+|----------|--------|
+| **Cmd+Alt+L** | Fold All Code Regions |
+| **Cmd+Alt+K** | Unfold All Code Regions |
+| **Cmd+Shift+U** | Convert to Uppercase |
+| **Cmd+Shift+L** | Convert to Lowercase |
+| **Cmd+Ctrl+S** | Sort Lines |
+| **Cmd+Shift+S** | Insert Snippet |
 
 ### JSON Operations
 
@@ -223,15 +274,22 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ### Test Coverage
 
-- **198 unit tests** covering all core functionality
-- **97-100% coverage** on core modules:
+- **516 unit tests** covering all functionality
+- **100% coverage** on all modules:
   - Document: 100% (21 tests)
   - FileManager: 100% (24 tests)
-  - TabManager: 98% (24 tests)
-  - RecentFilesManager: 94% (21 tests)
-  - FindReplaceEngine: 97% (40 tests)
+  - RecentFilesManager: 100% (21 tests)
+  - FindReplaceEngine: 100% (40 tests)
   - JsonHandler: 100% (38 tests)
   - JsonTreeModel: 100% (30 tests)
+  - ThemeManager: 100% (25 tests)
+  - VisualIndicators: 100% (38 tests)
+  - MultiCursorManager: 100% (30 tests)
+  - TextTransformer: 100% (48 tests)
+  - CodeFolder: 100% (36 tests)
+  - SmartIndenter: 100% (38 tests)
+  - AdvancedSearchEngine: 100% (57 tests)
+  - SnippetManager: 100% (46 tests)
 - All tests pass before each commit
 
 ### Project Structure
@@ -239,26 +297,51 @@ uv run pytest tests/ --cov=src --cov-report=html
 ```
 jText/
 ├── src/
-│   ├── document.py              # Document model with undo/redo (21 tests)
-│   ├── file_manager.py          # File I/O operations (24 tests)
-│   ├── tab_manager.py           # Multi-tab document management (24 tests)
-│   ├── recent_files_manager.py  # Recent files tracking (21 tests)
-│   ├── find_replace.py          # Find and replace engine (40 tests)
-│   ├── json_handler.py          # JSON operations (38 tests)
-│   ├── json_syntax_highlighter.py # JSON syntax highlighting
-│   ├── json_tree_model.py       # JSON hierarchical tree model (30 tests)
-│   ├── json_tree_view.py        # JSON tree view widget
-│   └── ui/
-│       ├── main_window.py       # PyQt6 main application window
-│       └── json_tree_dialog.py  # JSON tree view dialog
+│   ├── Core/
+│   │   ├── document.py                    # Document model with undo/redo (21 tests)
+│   │   ├── file_manager.py                # File I/O operations (24 tests)
+│   │   ├── recent_files_manager.py        # Recent files tracking (21 tests)
+│   │   └── find_replace.py                # Find and replace engine (40 tests)
+│   │
+│   ├── Advanced Text Editing/
+│   │   ├── multi_cursor.py                # Multi-cursor support (30 tests)
+│   │   ├── text_transformer.py            # Text case/line operations (48 tests)
+│   │   ├── code_folder.py                 # Code folding regions (36 tests)
+│   │   ├── smart_indenter.py              # Smart indentation (38 tests)
+│   │   ├── advanced_search.py             # Regex search with history (57 tests)
+│   │   └── snippet_manager.py             # Snippet library (46 tests)
+│   │
+│   ├── JSON Support/
+│   │   ├── json_handler.py                # JSON operations (38 tests)
+│   │   ├── json_syntax_highlighter.py     # JSON syntax highlighting
+│   │   ├── json_tree_model.py             # JSON hierarchical tree (30 tests)
+│   │   └── json_tree_view.py              # JSON tree view widget
+│   │
+│   ├── Visual Polish/
+│   │   ├── theme_manager.py               # Theme management (25 tests)
+│   │   ├── visual_indicators.py           # Line endings/whitespace (38 tests)
+│   │   └── ui/visual_indicator_renderer.py # Visual indicator highlighter
+│   │
+│   └── UI/
+│       ├── main_window.py                 # PyQt6 main window with all menus
+│       └── json_tree_dialog.py            # JSON tree view dialog
+│
 ├── tests/
 │   ├── test_document.py
 │   ├── test_file_manager.py
-│   ├── test_tab_manager.py
 │   ├── test_recent_files_manager.py
 │   ├── test_find_replace.py
 │   ├── test_json_handler.py
-│   └── test_json_tree_model.py
+│   ├── test_json_tree_model.py
+│   ├── test_theme_manager.py
+│   ├── test_visual_indicators.py
+│   ├── test_multi_cursor.py
+│   ├── test_text_transformer.py
+│   ├── test_code_folder.py
+│   ├── test_smart_indenter.py
+│   ├── test_advanced_search.py
+│   └── test_snippet_manager.py
+│
 ├── main.py                       # Application entry point
 ├── CLAUDE.md                     # Development guide for Claude Code
 ├── pyproject.toml               # uv project configuration
@@ -330,13 +413,25 @@ For issues, feature requests, or questions:
 
 ## Future Roadmap
 
+### Completed
 - [x] Multiple tabs support
-- [x] JSON syntax highlighting
 - [x] Find and replace
 - [x] Recent files menu
-- [x] JSON formatting and validation
-- [ ] Line numbers
-- [ ] Customizable themes
-- [ ] Advanced search and navigation
-- [ ] Plugin system
-- [ ] More syntax highlighting (Python, HTML, CSS, etc.)
+- [x] JSON syntax highlighting and operations
+- [x] JSON tree view
+- [x] Dark/Light themes with customization
+- [x] Whitespace and line ending indicators
+- [x] Advanced search with regex support
+- [x] Code folding for functions and classes
+- [x] Text transformations (case conversion, sorting)
+- [x] Smart indentation with auto-detect
+- [x] Code snippet library with expansion
+- [x] Multi-cursor support
+
+### Planned
+- [ ] Line numbers in editor
+- [ ] Language-specific syntax highlighting (Python, HTML, CSS, JavaScript)
+- [ ] Plugin/extension system
+- [ ] Command palette for quick access to features
+- [ ] Code completion and intellisense
+- [ ] Git integration (diff, blame, commit)
