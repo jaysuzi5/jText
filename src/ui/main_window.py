@@ -27,6 +27,12 @@ from src.ui.json_tree_dialog import JsonTreeDialog
 from src.theme_manager import ThemeManager
 from src.visual_indicators import LineEndingDetector, WhitespaceAnalyzer
 from src.ui.visual_indicator_renderer import VisualIndicatorHighlighter
+from src.multi_cursor import MultiCursorManager
+from src.text_transformer import TextTransformer
+from src.code_folder import CodeFolder
+from src.smart_indenter import SmartIndenter
+from src.advanced_search import AdvancedSearchEngine, SearchQuery
+from src.snippet_manager import SnippetManager
 
 
 class FindReplaceDialog(QDialog):
@@ -84,6 +90,11 @@ class MainWindow(QMainWindow):
         self.theme_manager = ThemeManager()
         self.recent_files = RecentFilesManager()
         self.find_replace_engine = FindReplaceEngine()
+        self.multi_cursor_manager = MultiCursorManager()
+        self.code_folder = CodeFolder()
+        self.smart_indenter = SmartIndenter()
+        self.advanced_search = AdvancedSearchEngine()
+        self.snippet_manager = SnippetManager()
         self.json_tree_dialog: JsonTreeDialog | None = None
 
         self._is_loading = False
@@ -334,6 +345,78 @@ class MainWindow(QMainWindow):
         view_tree_action.setShortcut("Cmd+J")
         view_tree_action.triggered.connect(self._show_json_tree)
         json_menu.addAction(view_tree_action)
+
+        # Tools menu (Advanced Text Editing)
+        tools_menu = self.menuBar().addMenu("&Tools")
+
+        # Code Folding
+        fold_all_action = QAction("&Fold All", self)
+        fold_all_action.setShortcut("Cmd+Alt+L")
+        fold_all_action.triggered.connect(self._fold_all)
+        tools_menu.addAction(fold_all_action)
+
+        unfold_all_action = QAction("&Unfold All", self)
+        unfold_all_action.setShortcut("Cmd+Alt+K")
+        unfold_all_action.triggered.connect(self._unfold_all)
+        tools_menu.addAction(unfold_all_action)
+
+        tools_menu.addSeparator()
+
+        # Text Transformation
+        uppercase_action = QAction("Convert to &Uppercase", self)
+        uppercase_action.setShortcut("Cmd+Shift+U")
+        uppercase_action.triggered.connect(self._transform_uppercase)
+        tools_menu.addAction(uppercase_action)
+
+        lowercase_action = QAction("Convert to &Lowercase", self)
+        lowercase_action.setShortcut("Cmd+Shift+L")
+        lowercase_action.triggered.connect(self._transform_lowercase)
+        tools_menu.addAction(lowercase_action)
+
+        titlecase_action = QAction("Convert to &Title Case", self)
+        titlecase_action.triggered.connect(self._transform_titlecase)
+        tools_menu.addAction(titlecase_action)
+
+        tools_menu.addSeparator()
+
+        # Line Operations
+        sort_lines_action = QAction("&Sort Lines", self)
+        sort_lines_action.setShortcut("Cmd+Ctrl+S")
+        sort_lines_action.triggered.connect(self._sort_lines)
+        tools_menu.addAction(sort_lines_action)
+
+        reverse_lines_action = QAction("&Reverse Lines", self)
+        reverse_lines_action.triggered.connect(self._reverse_lines)
+        tools_menu.addAction(reverse_lines_action)
+
+        remove_duplicates_action = QAction("Remove &Duplicate Lines", self)
+        remove_duplicates_action.triggered.connect(self._remove_duplicate_lines)
+        tools_menu.addAction(remove_duplicates_action)
+
+        remove_empty_action = QAction("Remove &Empty Lines", self)
+        remove_empty_action.triggered.connect(self._remove_empty_lines)
+        tools_menu.addAction(remove_empty_action)
+
+        tools_menu.addSeparator()
+
+        # Indentation
+        indent_action = QAction("&Indent Selection", self)
+        indent_action.setShortcut("Tab")
+        indent_action.triggered.connect(self._indent_selection)
+        tools_menu.addAction(indent_action)
+
+        dedent_action = QAction("&Dedent Selection", self)
+        dedent_action.setShortcut("Shift+Tab")
+        dedent_action.triggered.connect(self._dedent_selection)
+        tools_menu.addAction(dedent_action)
+
+        tools_menu.addSeparator()
+
+        # Snippets
+        insert_snippet_action = QAction("&Insert Snippet", self)
+        insert_snippet_action.setShortcut("Cmd+Shift+S")
+        insert_snippet_action.triggered.connect(self._insert_snippet)
+        tools_menu.addAction(insert_snippet_action)
 
     def _create_find_replace_dialog(self):
         """Create the find and replace dialog."""
@@ -889,3 +972,204 @@ class MainWindow(QMainWindow):
             show_whitespace = self.show_whitespace_action.isChecked()
             highlighter = self.visual_highlighters[index]
             highlighter.set_show_whitespace(show_whitespace)
+
+    # Advanced Text Editing Features
+
+    def _fold_all(self):
+        """Fold all code regions."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        self.code_folder.analyze(text_edit.toPlainText())
+        self.code_folder.fold_all()
+        QMessageBox.information(self, "Code Folding", "All regions folded.")
+
+    def _unfold_all(self):
+        """Unfold all code regions."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        self.code_folder.analyze(text_edit.toPlainText())
+        self.code_folder.unfold_all()
+        QMessageBox.information(self, "Code Folding", "All regions unfolded.")
+
+    def _transform_uppercase(self):
+        """Convert selected text to uppercase."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            transformed = TextTransformer.to_uppercase(selected_text)
+            cursor.insertText(transformed)
+        else:
+            content = text_edit.toPlainText()
+            transformed = TextTransformer.to_uppercase(content)
+            text_edit.setPlainText(transformed)
+
+    def _transform_lowercase(self):
+        """Convert selected text to lowercase."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            transformed = TextTransformer.to_lowercase(selected_text)
+            cursor.insertText(transformed)
+        else:
+            content = text_edit.toPlainText()
+            transformed = TextTransformer.to_lowercase(content)
+            text_edit.setPlainText(transformed)
+
+    def _transform_titlecase(self):
+        """Convert selected text to title case."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            transformed = TextTransformer.to_titlecase(selected_text)
+            cursor.insertText(transformed)
+        else:
+            content = text_edit.toPlainText()
+            transformed = TextTransformer.to_titlecase(content)
+            text_edit.setPlainText(transformed)
+
+    def _sort_lines(self):
+        """Sort lines in selection or entire document."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            sorted_text = TextTransformer.sort_lines(selected_text)
+            cursor.insertText(sorted_text)
+        else:
+            content = text_edit.toPlainText()
+            sorted_text = TextTransformer.sort_lines(content)
+            text_edit.setPlainText(sorted_text)
+
+    def _reverse_lines(self):
+        """Reverse the order of lines."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            reversed_text = TextTransformer.reverse_lines(selected_text)
+            cursor.insertText(reversed_text)
+        else:
+            content = text_edit.toPlainText()
+            reversed_text = TextTransformer.reverse_lines(content)
+            text_edit.setPlainText(reversed_text)
+
+    def _remove_duplicate_lines(self):
+        """Remove duplicate lines."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            deduplicated = TextTransformer.remove_duplicate_lines(selected_text, preserve_order=True)
+            cursor.insertText(deduplicated)
+        else:
+            content = text_edit.toPlainText()
+            deduplicated = TextTransformer.remove_duplicate_lines(content, preserve_order=True)
+            text_edit.setPlainText(deduplicated)
+
+    def _remove_empty_lines(self):
+        """Remove empty lines."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            cleaned = TextTransformer.remove_empty_lines(selected_text)
+            cursor.insertText(cleaned)
+        else:
+            content = text_edit.toPlainText()
+            cleaned = TextTransformer.remove_empty_lines(content)
+            text_edit.setPlainText(cleaned)
+
+    def _indent_selection(self):
+        """Indent the selected lines."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            indented = TextTransformer.indent_lines(selected_text, indent=4)
+            cursor.insertText(indented)
+
+    def _dedent_selection(self):
+        """Dedent the selected lines."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        cursor = text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            dedented = TextTransformer.dedent_lines(selected_text, indent=4)
+            cursor.insertText(dedented)
+
+    def _insert_snippet(self):
+        """Insert a code snippet."""
+        text_edit = self._get_current_text_edit()
+        if not text_edit:
+            return
+
+        # Get list of available snippets
+        snippets = self.snippet_manager.get_all_snippets()
+        snippet_names = [s.title for s in snippets]
+
+        if not snippet_names:
+            QMessageBox.information(self, "Snippets", "No snippets available.")
+            return
+
+        # Simple dialog to select snippet
+        from PyQt6.QtWidgets import QComboBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Insert Snippet")
+        layout = QVBoxLayout()
+
+        label = QLabel("Select snippet:")
+        layout.addWidget(label)
+
+        combo = QComboBox()
+        combo.addItems(snippet_names)
+        layout.addWidget(combo)
+
+        ok_button = QPushButton("Insert")
+        ok_button.clicked.connect(dialog.accept)
+        layout.addWidget(ok_button)
+
+        dialog.setLayout(layout)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_title = combo.currentText()
+            snippet = next((s for s in snippets if s.title == selected_title), None)
+
+            if snippet:
+                content = self.snippet_manager.use_snippet(snippet.name)
+                if content:
+                    text_edit.insertPlainText(content)
