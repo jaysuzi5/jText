@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self._add_new_tab()
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         self.tab_widget.tabCloseRequested.connect(self._on_tab_close_requested)
+        self.tab_widget.tabReordered.connect(self._on_tab_reordered)
 
     def _add_new_tab(self, document=None):
         """Add a new tab with a document.
@@ -547,6 +548,43 @@ class MainWindow(QMainWindow):
             del self.highlighters[index]
         if index in self.visual_highlighters:
             del self.visual_highlighters[index]
+
+    def _on_tab_reordered(self, from_index: int, to_index: int):
+        """Handle tab reordering via drag-and-drop.
+
+        Updates the internal dictionaries to match the new tab order.
+
+        Args:
+            from_index: Original index of the tab
+            to_index: New index of the tab
+        """
+        # Rebuild the index mapping based on current tab order
+        old_documents = self.documents.copy()
+        old_text_edits = self.text_edits.copy()
+        old_highlighters = self.highlighters.copy()
+        old_visual_highlighters = self.visual_highlighters.copy()
+
+        # Clear the dictionaries
+        self.documents.clear()
+        self.text_edits.clear()
+        self.highlighters.clear()
+        self.visual_highlighters.clear()
+
+        # Rebuild with new indices matching current widget order
+        for new_index in range(self.tab_widget.count()):
+            widget = self.tab_widget.widget(new_index)
+
+            # Find which old index this widget belongs to
+            for old_index, old_widget in old_text_edits.items():
+                if old_widget is widget:
+                    # Found the matching widget, map it to the new index
+                    self.documents[new_index] = old_documents.get(old_index)
+                    self.text_edits[new_index] = old_text_edits.get(old_index)
+                    if old_index in old_highlighters:
+                        self.highlighters[new_index] = old_highlighters[old_index]
+                    if old_index in old_visual_highlighters:
+                        self.visual_highlighters[new_index] = old_visual_highlighters[old_index]
+                    break
 
     def _new_file(self):
         """Create a new file in a new tab."""

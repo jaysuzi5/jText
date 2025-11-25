@@ -1,12 +1,15 @@
 """Draggable tab widget for reordering tabs via drag-and-drop."""
 
 from PyQt6.QtWidgets import QTabWidget
-from PyQt6.QtCore import Qt, QMimeData, QByteArray
+from PyQt6.QtCore import Qt, QMimeData, QByteArray, pyqtSignal
 from PyQt6.QtGui import QDrag, QPixmap
 
 
 class DraggableTabWidget(QTabWidget):
     """QTabWidget with drag-and-drop support for tab reordering."""
+
+    # Signal emitted when tabs are reordered: (from_index, to_index)
+    tabReordered = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
         """Initialize the draggable tab widget."""
@@ -127,11 +130,17 @@ class DraggableTabWidget(QTabWidget):
         # Remove from source position
         self.removeTab(from_index)
 
-        # Insert at destination position
-        if to_index > from_index:
-            to_index -= 1
+        # Adjust target index after removal
+        # When removing a tab before the target, indices shift down
+        adjusted_to_index = to_index
+        if from_index < to_index:
+            adjusted_to_index = to_index - 1
 
-        self.insertTab(to_index, widget, icon, text)
+        # Insert at destination position
+        self.insertTab(adjusted_to_index, widget, icon, text)
 
         # Set the moved tab as current
-        self.setCurrentIndex(to_index)
+        self.setCurrentIndex(adjusted_to_index)
+
+        # Emit signal to notify parent of the reorder
+        self.tabReordered.emit(from_index, adjusted_to_index)
