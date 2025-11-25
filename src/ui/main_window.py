@@ -24,6 +24,7 @@ from src.find_replace import FindReplaceEngine
 from src.json_handler import JsonHandler
 from src.json_syntax_highlighter import JsonSyntaxHighlighter
 from src.ui.json_tree_dialog import JsonTreeDialog
+from src.ui.draggable_tab_widget import DraggableTabWidget
 from src.theme_manager import ThemeManager
 from src.visual_indicators import LineEndingDetector, WhitespaceAnalyzer
 from src.ui.visual_indicator_renderer import VisualIndicatorHighlighter
@@ -126,7 +127,7 @@ class MainWindow(QMainWindow):
 
     def _create_tab_widget(self):
         """Create the tab widget with text editors."""
-        self.tab_widget = QTabWidget()
+        self.tab_widget = DraggableTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.setCentralWidget(self.tab_widget)
 

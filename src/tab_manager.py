@@ -132,3 +132,69 @@ class TabManager:
         """Clear all tabs and reset state."""
         self._documents.clear()
         self._active_index = -1
+
+    def swap_tabs(self, from_index: int, to_index: int) -> bool:
+        """Swap two tabs by their indices.
+
+        Args:
+            from_index: Index of first tab to swap
+            to_index: Index of second tab to swap
+
+        Returns:
+            True if swap was successful, False if indices invalid
+        """
+        if not (0 <= from_index < len(self._documents) and 0 <= to_index < len(self._documents)):
+            return False
+
+        if from_index == to_index:
+            return True
+
+        # Swap the documents
+        self._documents[from_index], self._documents[to_index] = (
+            self._documents[to_index],
+            self._documents[from_index],
+        )
+
+        # Update active index if it was one of the swapped tabs
+        if self._active_index == from_index:
+            self._active_index = to_index
+        elif self._active_index == to_index:
+            self._active_index = from_index
+
+        return True
+
+    def reorder_tab(self, from_index: int, to_index: int) -> bool:
+        """Move a tab from one position to another.
+
+        Args:
+            from_index: Current index of the tab
+            to_index: Desired index for the tab
+
+        Returns:
+            True if reorder was successful, False if indices invalid
+        """
+        if not (0 <= from_index < len(self._documents) and 0 <= to_index < len(self._documents)):
+            return False
+
+        if from_index == to_index:
+            return True
+
+        # Remove from source
+        document = self._documents.pop(from_index)
+
+        # Insert at destination
+        self._documents.insert(to_index, document)
+
+        # Update active index
+        if self._active_index == from_index:
+            self._active_index = to_index
+        elif from_index < to_index:
+            # Moving right: indices between from_index+1 and to_index shift left
+            if from_index < self._active_index <= to_index:
+                self._active_index -= 1
+        else:
+            # Moving left: indices between to_index and from_index-1 shift right
+            if to_index <= self._active_index < from_index:
+                self._active_index += 1
+
+        return True
