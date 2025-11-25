@@ -503,6 +503,10 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index):
         """Handle tab change event."""
         if index >= 0:
+            # Always rebuild mappings when tab changes to handle potential reordering
+            # This ensures documents dict is synchronized with actual tab positions
+            self._rebuild_index_mappings()
+
             doc = self.documents.get(index)
             text_edit = self.text_edits.get(index)
 
@@ -549,16 +553,13 @@ class MainWindow(QMainWindow):
         if index in self.visual_highlighters:
             del self.visual_highlighters[index]
 
-    def _on_tab_reordered(self, from_index: int, to_index: int):
-        """Handle tab reordering via drag-and-drop.
+    def _rebuild_index_mappings(self):
+        """Rebuild index mappings to match current tab order.
 
-        Updates the internal dictionaries to match the new tab order.
-
-        Args:
-            from_index: Original index of the tab
-            to_index: New index of the tab
+        This is called when tabs are reordered to ensure documents dict
+        is synchronized with actual tab widget positions.
         """
-        # Rebuild the index mapping based on current tab order
+        # Save old mappings
         old_documents = self.documents.copy()
         old_text_edits = self.text_edits.copy()
         old_highlighters = self.highlighters.copy()
@@ -574,7 +575,7 @@ class MainWindow(QMainWindow):
         for new_index in range(self.tab_widget.count()):
             widget = self.tab_widget.widget(new_index)
 
-            # Find which old index this widget belongs to
+            # Find which old index this widget belongs to by object identity
             for old_index, old_widget in old_text_edits.items():
                 if old_widget is widget:
                     # Found the matching widget, map it to the new index
@@ -585,6 +586,17 @@ class MainWindow(QMainWindow):
                     if old_index in old_visual_highlighters:
                         self.visual_highlighters[new_index] = old_visual_highlighters[old_index]
                     break
+
+    def _on_tab_reordered(self, from_index: int, to_index: int):
+        """Handle tab reordering via drag-and-drop.
+
+        Updates the internal dictionaries to match the new tab order.
+
+        Args:
+            from_index: Original index of the tab
+            to_index: New index of the tab
+        """
+        self._rebuild_index_mappings()
 
     def _new_file(self):
         """Create a new file in a new tab."""
