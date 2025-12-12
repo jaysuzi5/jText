@@ -1,9 +1,9 @@
 """Main window for the jText application."""
 
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QVBoxLayout,
-    QTextEdit,
     QStatusBar,
     QFileDialog,
     QTabWidget,
@@ -23,7 +23,9 @@ from src.recent_files_manager import RecentFilesManager
 from src.find_replace import FindReplaceEngine
 from src.json_handler import JsonHandler
 from src.json_syntax_highlighter import JsonSyntaxHighlighter
+from src.ui.custom_text_edit import CustomTextEdit
 from src.ui.json_tree_dialog import JsonTreeDialog
+from src.ui.draggable_tab_widget import DraggableTabWidget
 from src.theme_manager import ThemeManager
 from src.visual_indicators import LineEndingDetector, WhitespaceAnalyzer
 from src.ui.visual_indicator_renderer import VisualIndicatorHighlighter
@@ -33,6 +35,7 @@ from src.code_folder import CodeFolder
 from src.smart_indenter import SmartIndenter
 from src.advanced_search import AdvancedSearchEngine, SearchQuery
 from src.snippet_manager import SnippetManager
+from src.character_counter import CharacterCounter
 
 
 class FindReplaceDialog(QDialog):
@@ -106,7 +109,7 @@ class MainWindow(QMainWindow):
         # Map tab widget indices to documents
         # We use QTabWidget directly without TabManager for simpler management
         self.documents = {}  # Maps tab_widget_index -> Document
-        self.text_edits = {}  # Maps tab_widget_index -> QTextEdit
+        self.text_edits = {}  # Maps tab_widget_index -> CustomTextEdit
         self.highlighters = {}  # Maps tab_widget_index -> JsonSyntaxHighlighter
         self.visual_highlighters = {}  # Maps tab_widget_index -> VisualIndicatorHighlighter
 
@@ -126,7 +129,7 @@ class MainWindow(QMainWindow):
 
     def _create_tab_widget(self):
         """Create the tab widget with text editors."""
-        self.tab_widget = QTabWidget()
+        self.tab_widget = DraggableTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.setCentralWidget(self.tab_widget)
 
@@ -134,6 +137,7 @@ class MainWindow(QMainWindow):
         self._add_new_tab()
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         self.tab_widget.tabCloseRequested.connect(self._on_tab_close_requested)
+        self.tab_widget.tabReordered.connect(self._on_tab_reordered)
 
     def _add_new_tab(self, document=None):
         """Add a new tab with a document.
@@ -145,7 +149,7 @@ class MainWindow(QMainWindow):
             document = Document()
 
         # Create text editor
-        text_edit = QTextEdit()
+        text_edit = CustomTextEdit()
         text_edit.setFont(text_edit.font())
         text_edit.textChanged.connect(self._on_text_changed)
         text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
@@ -283,7 +287,9 @@ class MainWindow(QMainWindow):
         # Paste
         paste_action = QAction("&Paste", self)
         paste_action.setShortcut(QKeySequence.StandardKey.Paste)
-        paste_action.triggered.connect(lambda: self._get_current_text_edit() and self._get_current_text_edit().paste())
+        paste_action.triggered.connect(
+            lambda: self._get_current_text_edit() and self._get_current_text_edit().paste()
+        )
         edit_menu.addAction(paste_action)
 
         edit_menu.addSeparator()
@@ -463,12 +469,15 @@ class MainWindow(QMainWindow):
         if self._current_line_ending is None or self._current_indent_style is None:
             self._analyze_document_properties(doc)
 
+        # Get character count
+        char_count = CharacterCounter.count_characters(doc.content)
+
         # Build status message with line ending and indentation info
         line_ending_str = self._current_line_ending.display_name() if self._current_line_ending else "LF"
         indent_str = f"{self._current_indent_style} ({self._current_indent_size})" if self._current_indent_style != "none" else "no indent"
 
         self.status_bar_label.showMessage(
-            f"{file_name}{modified_text} | {line_ending_str} | {indent_str} | Tab {current_tab} of {tab_count}"
+            f"{file_name}{modified_text} | {char_count} chars | {line_ending_str} | {indent_str} | Tab {current_tab} of {tab_count}"
         )
         self._update_status_position()
 
@@ -501,6 +510,10 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index):
         """Handle tab change event."""
         if index >= 0:
+            # Always rebuild mappings when tab changes to handle potential reordering
+            # This ensures documents dict is synchronized with actual tab positions
+            self._rebuild_index_mappings()
+
             doc = self.documents.get(index)
             text_edit = self.text_edits.get(index)
 
@@ -546,6 +559,51 @@ class MainWindow(QMainWindow):
             del self.highlighters[index]
         if index in self.visual_highlighters:
             del self.visual_highlighters[index]
+
+    def _rebuild_index_mappings(self):
+        """Rebuild index mappings to match current tab order.
+
+        This is called when tabs are reordered to ensure documents dict
+        is synchronized with actual tab widget positions.
+        """
+        # Save old mappings
+        old_documents = self.documents.copy()
+        old_text_edits = self.text_edits.copy()
+        old_highlighters = self.highlighters.copy()
+        old_visual_highlighters = self.visual_highlighters.copy()
+
+        # Clear the dictionaries
+        self.documents.clear()
+        self.text_edits.clear()
+        self.highlighters.clear()
+        self.visual_highlighters.clear()
+
+        # Rebuild with new indices matching current widget order
+        for new_index in range(self.tab_widget.count()):
+            widget = self.tab_widget.widget(new_index)
+
+            # Find which old index this widget belongs to by object identity
+            for old_index, old_widget in old_text_edits.items():
+                if old_widget is widget:
+                    # Found the matching widget, map it to the new index
+                    self.documents[new_index] = old_documents.get(old_index)
+                    self.text_edits[new_index] = old_text_edits.get(old_index)
+                    if old_index in old_highlighters:
+                        self.highlighters[new_index] = old_highlighters[old_index]
+                    if old_index in old_visual_highlighters:
+                        self.visual_highlighters[new_index] = old_visual_highlighters[old_index]
+                    break
+
+    def _on_tab_reordered(self, from_index: int, to_index: int):
+        """Handle tab reordering via drag-and-drop.
+
+        Updates the internal dictionaries to match the new tab order.
+
+        Args:
+            from_index: Original index of the tab
+            to_index: New index of the tab
+        """
+        self._rebuild_index_mappings()
 
     def _new_file(self):
         """Create a new file in a new tab."""
