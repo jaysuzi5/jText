@@ -1,9 +1,9 @@
 """Main window for the jText application."""
 
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QVBoxLayout,
-    QTextEdit,
     QStatusBar,
     QFileDialog,
     QTabWidget,
@@ -23,6 +23,7 @@ from src.recent_files_manager import RecentFilesManager
 from src.find_replace import FindReplaceEngine
 from src.json_handler import JsonHandler
 from src.json_syntax_highlighter import JsonSyntaxHighlighter
+from src.ui.custom_text_edit import CustomTextEdit
 from src.ui.json_tree_dialog import JsonTreeDialog
 from src.ui.draggable_tab_widget import DraggableTabWidget
 from src.theme_manager import ThemeManager
@@ -34,6 +35,7 @@ from src.code_folder import CodeFolder
 from src.smart_indenter import SmartIndenter
 from src.advanced_search import AdvancedSearchEngine, SearchQuery
 from src.snippet_manager import SnippetManager
+from src.character_counter import CharacterCounter
 
 
 class FindReplaceDialog(QDialog):
@@ -107,7 +109,7 @@ class MainWindow(QMainWindow):
         # Map tab widget indices to documents
         # We use QTabWidget directly without TabManager for simpler management
         self.documents = {}  # Maps tab_widget_index -> Document
-        self.text_edits = {}  # Maps tab_widget_index -> QTextEdit
+        self.text_edits = {}  # Maps tab_widget_index -> CustomTextEdit
         self.highlighters = {}  # Maps tab_widget_index -> JsonSyntaxHighlighter
         self.visual_highlighters = {}  # Maps tab_widget_index -> VisualIndicatorHighlighter
 
@@ -147,7 +149,7 @@ class MainWindow(QMainWindow):
             document = Document()
 
         # Create text editor
-        text_edit = QTextEdit()
+        text_edit = CustomTextEdit()
         text_edit.setFont(text_edit.font())
         text_edit.textChanged.connect(self._on_text_changed)
         text_edit.cursorPositionChanged.connect(self._on_cursor_position_changed)
@@ -285,7 +287,9 @@ class MainWindow(QMainWindow):
         # Paste
         paste_action = QAction("&Paste", self)
         paste_action.setShortcut(QKeySequence.StandardKey.Paste)
-        paste_action.triggered.connect(lambda: self._get_current_text_edit() and self._get_current_text_edit().paste())
+        paste_action.triggered.connect(
+            lambda: self._get_current_text_edit() and self._get_current_text_edit().paste()
+        )
         edit_menu.addAction(paste_action)
 
         edit_menu.addSeparator()
@@ -465,12 +469,15 @@ class MainWindow(QMainWindow):
         if self._current_line_ending is None or self._current_indent_style is None:
             self._analyze_document_properties(doc)
 
+        # Get character count
+        char_count = CharacterCounter.count_characters(doc.content)
+
         # Build status message with line ending and indentation info
         line_ending_str = self._current_line_ending.display_name() if self._current_line_ending else "LF"
         indent_str = f"{self._current_indent_style} ({self._current_indent_size})" if self._current_indent_style != "none" else "no indent"
 
         self.status_bar_label.showMessage(
-            f"{file_name}{modified_text} | {line_ending_str} | {indent_str} | Tab {current_tab} of {tab_count}"
+            f"{file_name}{modified_text} | {char_count} chars | {line_ending_str} | {indent_str} | Tab {current_tab} of {tab_count}"
         )
         self._update_status_position()
 
